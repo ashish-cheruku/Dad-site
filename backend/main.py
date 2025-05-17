@@ -661,4 +661,4 @@ async def delete_faculty(faculty_id: str, current_user = Depends(get_current_act
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8004, reload=True) 
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True) 
