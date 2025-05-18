@@ -1,0 +1,1161 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { studentService, attendanceService } from '../services/api';
+import Navbar from '../components/Navbar';
+import { Button } from '../components/ui/button';
+
+const StudentManagement = () => {
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [filterYear, setFilterYear] = useState('');
+  const [filterGroup, setFilterGroup] = useState('');
+  const [filterMedium, setFilterMedium] = useState('');
+  
+  // Modal states
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [currentStudent, setCurrentStudent] = useState(null);
+  
+  // Student info page state
+  const [showStudentInfo, setShowStudentInfo] = useState(false);
+  const [studentDetails, setStudentDetails] = useState(null);
+  const [studentAttendance, setStudentAttendance] = useState([]);
+  const [loadingAttendance, setLoadingAttendance] = useState(false);
+  const [currentAcademicYear, setCurrentAcademicYear] = useState('2023-2024');
+  const [selectedMonth, setSelectedMonth] = useState('january');
+
+  // New student form state
+  const [newStudent, setNewStudent] = useState({
+    admission_number: '',
+    year: 1,
+    group: 'mpc',
+    medium: 'english',
+    name: '',
+    father_name: '',
+    date_of_birth: '',
+    caste: '',
+    gender: 'male',
+    aadhar_number: '',
+    student_phone: '',
+    parent_phone: ''
+  });
+
+  // Months for attendance data
+  const months = [
+    'january', 'february', 'march', 'april', 'may', 'june', 
+    'july', 'august', 'september', 'october', 'november', 'december'
+  ];
+
+  const fetchStudents = useCallback(async () => {
+    try {
+      setLoading(true);
+      const year = filterYear ? parseInt(filterYear) : null;
+      const group = filterGroup || null;
+      const medium = filterMedium || null;
+      
+      const data = await studentService.getAllStudents(year, group, medium);
+      setStudents(data);
+    } catch (err) {
+      setError('Failed to fetch students');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterYear, filterGroup, filterMedium]);
+
+  // Fetch student details and attendance
+  const fetchStudentDetails = async (studentId) => {
+    try {
+      setLoading(true);
+      const studentData = await studentService.getStudent(studentId);
+      setStudentDetails(studentData);
+      
+      // Fetch attendance data
+      await fetchStudentAttendance(studentId);
+      
+      setShowStudentInfo(true);
+    } catch (err) {
+      setError('Failed to fetch student details');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Fetch student attendance
+  const fetchStudentAttendance = useCallback(async (studentId) => {
+    try {
+      setLoadingAttendance(true);
+      const attendanceData = await attendanceService.getStudentAttendance(
+        studentId,
+        currentAcademicYear,
+        selectedMonth
+      );
+      setStudentAttendance(attendanceData);
+    } catch (err) {
+      console.error('Error fetching attendance data:', err);
+    } finally {
+      setLoadingAttendance(false);
+    }
+  }, [currentAcademicYear, selectedMonth]);
+
+  // Fetch students on component mount and when filters change
+  useEffect(() => {
+    fetchStudents();
+  }, [filterYear, filterGroup, filterMedium, fetchStudents]);
+
+  // Refetch attendance when month or academic year changes
+  useEffect(() => {
+    if (studentDetails && showStudentInfo) {
+      fetchStudentAttendance(studentDetails.id);
+    }
+  }, [selectedMonth, currentAcademicYear, studentDetails, showStudentInfo, fetchStudentAttendance]);
+
+  // Handle input change for new/edit student form
+  const handleStudentInputChange = (e, isNew = true) => {
+    const { name, value } = e.target;
+    if (isNew) {
+      setNewStudent({
+        ...newStudent,
+        [name]: value
+      });
+    } else {
+      setCurrentStudent({
+        ...currentStudent,
+        [name]: value
+      });
+    }
+  };
+
+  // Create new student
+  const handleCreateStudent = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      setError(''); // Clear previous errors
+      await studentService.createStudent(newStudent);
+      setIsAddModalOpen(false);
+      setNewStudent({
+        admission_number: '',
+        year: 1,
+        group: 'mpc',
+        medium: 'english',
+        name: '',
+        father_name: '',
+        date_of_birth: '',
+        caste: '',
+        gender: 'male',
+        aadhar_number: '',
+        student_phone: '',
+        parent_phone: ''
+      });
+      fetchStudents();
+    } catch (err) {
+      console.error(err);
+      if (err.detail) {
+        // Check for specific validation errors
+        if (err.detail.includes('admission number already exists')) {
+          setError('A student with this admission number already exists. Please use a unique admission number.');
+        } else if (err.detail.includes('Aadhar number already exists')) {
+          setError('A student with this Aadhar number already exists. Please check and correct the Aadhar number.');
+        } else {
+          setError(err.detail || 'Failed to create student');
+        }
+      } else {
+        setError('Failed to create student');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update student
+  const handleUpdateStudent = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      setError(''); // Clear previous errors
+      await studentService.updateStudent(currentStudent.id, currentStudent);
+      setIsEditModalOpen(false);
+      fetchStudents();
+      
+      // Update student details if viewing the same student
+      if (studentDetails && studentDetails.id === currentStudent.id) {
+        setStudentDetails(currentStudent);
+      }
+    } catch (err) {
+      console.error(err);
+      if (err.detail) {
+        // Check for specific validation errors
+        if (err.detail.includes('admission number already exists')) {
+          setError('A student with this admission number already exists. Please use a unique admission number.');
+        } else if (err.detail.includes('Aadhar number already exists')) {
+          setError('A student with this Aadhar number already exists. Please check and correct the Aadhar number.');
+        } else {
+          setError(err.detail || 'Failed to update student');
+        }
+      } else {
+        setError('Failed to update student');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete student
+  const handleDeleteStudent = async () => {
+    try {
+      setLoading(true);
+      await studentService.deleteStudent(currentStudent.id);
+      setIsDeleteModalOpen(false);
+      
+      // Close student info if viewing the deleted student
+      if (studentDetails && studentDetails.id === currentStudent.id) {
+        setShowStudentInfo(false);
+        setStudentDetails(null);
+      }
+      
+      fetchStudents();
+    } catch (err) {
+      setError('Failed to delete student');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+  
+  // Capitalize first letter
+  const capitalize = (str) => {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  };
+
+  if (loading && students.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#171010]">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-2xl font-semibold animate-pulse text-white">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // If showing student info, render detailed student view
+  if (showStudentInfo && studentDetails) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#171010]">
+        <Navbar />
+        
+        <main className="flex-1 container py-8 mx-auto px-4">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex justify-between items-center mb-8 pb-4 border-b border-[#423F3E]">
+              <div>
+                <h1 className="text-3xl font-bold text-white">Student Information</h1>
+                <p className="mt-2 text-gray-300">Comprehensive details and attendance records</p>
+              </div>
+              <Button 
+                onClick={() => {
+                  setShowStudentInfo(false);
+                  setStudentDetails(null);
+                }}
+                className="py-2 px-4 rounded-lg"
+                style={{ backgroundColor: '#362222', color: 'white' }}
+              >
+                Back to Student List
+              </Button>
+            </div>
+            
+            {error && (
+              <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 rounded-lg mb-6">
+                {error}
+              </div>
+            )}
+            
+            {/* Student Details Card */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+              {/* Personal Info */}
+              <div className="col-span-1 bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] p-6">
+                <div className="flex flex-col items-center mb-4">
+                  <div className="h-24 w-24 rounded-full bg-[#362222] flex items-center justify-center text-3xl font-bold text-white mb-4">
+                    {studentDetails.name.charAt(0)}
+                  </div>
+                  <h2 className="text-xl font-semibold text-white text-center">{studentDetails.name}</h2>
+                  <p className="text-gray-400 text-center">{studentDetails.admission_number}</p>
+                </div>
+                
+                <div className="border-t border-[#423F3E] pt-4 mt-2">
+                  <div className="flex justify-between py-2">
+                    <span className="text-gray-400">Year:</span>
+                    <span className="text-white font-medium">{studentDetails.year}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-gray-400">Group:</span>
+                    <span className="text-white font-medium capitalize">{studentDetails.group}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-gray-400">Medium:</span>
+                    <span className="text-white font-medium capitalize">{studentDetails.medium}</span>
+                  </div>
+                </div>
+                
+                <div className="mt-4">
+                  <Button 
+                    onClick={() => {
+                      setCurrentStudent(studentDetails);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="w-full py-2 mt-4"
+                    style={{ backgroundColor: '#362222', color: 'white' }}
+                  >
+                    Edit Student
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Detailed Info */}
+              <div className="col-span-3 bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] p-6">
+                <h3 className="text-xl font-semibold text-white mb-4">Detailed Information</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                  <div>
+                    <h4 className="text-gray-400 text-sm">Father's Name</h4>
+                    <p className="text-white font-medium">{studentDetails.father_name || 'Not provided'}</p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-gray-400 text-sm">Date of Birth</h4>
+                    <p className="text-white font-medium">{formatDate(studentDetails.date_of_birth) || 'Not provided'}</p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-gray-400 text-sm">Gender</h4>
+                    <p className="text-white font-medium capitalize">{studentDetails.gender || 'Not provided'}</p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-gray-400 text-sm">Caste</h4>
+                    <p className="text-white font-medium">{studentDetails.caste || 'Not provided'}</p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-gray-400 text-sm">Aadhar Number</h4>
+                    <p className="text-white font-medium">{studentDetails.aadhar_number || 'Not provided'}</p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-gray-400 text-sm">Student Phone</h4>
+                    <p className="text-white font-medium">{studentDetails.student_phone || 'Not provided'}</p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-gray-400 text-sm">Parent Phone</h4>
+                    <p className="text-white font-medium">{studentDetails.parent_phone || 'Not provided'}</p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="text-gray-400 text-sm">Created At</h4>
+                    <p className="text-white font-medium">{formatDate(studentDetails.created_at) || 'Not available'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Attendance Section */}
+            <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] p-6 mb-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                <h3 className="text-xl font-semibold text-white mb-4 md:mb-0">Attendance Record</h3>
+                
+                <div className="flex flex-col md:flex-row items-start md:items-center space-y-3 md:space-y-0 md:space-x-4">
+                  <div>
+                    <select
+                      value={currentAcademicYear}
+                      onChange={(e) => setCurrentAcademicYear(e.target.value)}
+                      className="px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white"
+                    >
+                      <option value="2023-2024">2023-2024</option>
+                      <option value="2024-2025">2024-2025</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white"
+                    >
+                      {months.map((month) => (
+                        <option key={month} value={month}>
+                          {capitalize(month)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              {loadingAttendance ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div className="bg-[#171010] rounded-lg p-4 border border-[#423F3E]">
+                      <h4 className="text-gray-400 text-sm mb-2">Working Days</h4>
+                      <p className="text-3xl font-bold text-white">{studentAttendance.working_days || 0}</p>
+                    </div>
+                    
+                    <div className="bg-[#171010] rounded-lg p-4 border border-[#423F3E]">
+                      <h4 className="text-gray-400 text-sm mb-2">Days Present</h4>
+                      <p className="text-3xl font-bold text-white">{studentAttendance.days_present || 0}</p>
+                    </div>
+                    
+                    <div className="bg-[#171010] rounded-lg p-4 border border-[#423F3E]">
+                      <h4 className="text-gray-400 text-sm mb-2">Attendance Percentage</h4>
+                      <p className={`text-3xl font-bold ${
+                        studentAttendance.attendance_percentage >= 75 ? 'text-green-400' : 
+                        studentAttendance.attendance_percentage >= 50 ? 'text-yellow-400' : 
+                        'text-red-400'
+                      }`}>
+                        {studentAttendance.attendance_percentage ? `${studentAttendance.attendance_percentage.toFixed(1)}%` : '0%'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-[#171010] rounded-lg p-4 border border-[#423F3E]">
+                    <h4 className="text-white font-medium mb-2">Attendance Status</h4>
+                    {studentAttendance.working_days ? (
+                      <div className="w-full bg-[#362222] rounded-full h-4 overflow-hidden">
+                        <div 
+                          className={`h-full ${
+                            studentAttendance.attendance_percentage >= 75 ? 'bg-green-500' : 
+                            studentAttendance.attendance_percentage >= 50 ? 'bg-yellow-500' : 
+                            'bg-red-500'
+                          }`}
+                          style={{ width: `${studentAttendance.attendance_percentage || 0}%` }}
+                        ></div>
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-sm">No attendance data available for this month</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
+        
+        {/* Edit Student Modal */}
+        {isEditModalOpen && currentStudent && (
+          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#2B2B2B] rounded-lg shadow-xl border border-[#423F3E] p-6 max-w-2xl w-full overflow-y-auto max-h-[90vh]">
+              <h2 className="text-xl font-bold text-white mb-4">Edit Student</h2>
+              
+              <form onSubmit={handleUpdateStudent}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Admission Number</label>
+                    <input
+                      type="text"
+                      name="admission_number"
+                      value={currentStudent.admission_number}
+                      onChange={(e) => handleStudentInputChange(e, false)}
+                      className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Name</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={currentStudent.name}
+                      onChange={(e) => handleStudentInputChange(e, false)}
+                      className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Year</label>
+                    <select
+                      name="year"
+                      value={currentStudent.year}
+                      onChange={(e) => handleStudentInputChange(e, false)}
+                      className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                      required
+                    >
+                      <option value={1}>1st Year</option>
+                      <option value={2}>2nd Year</option>
+                      <option value={3}>3rd Year</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Group</label>
+                    <select
+                      name="group"
+                      value={currentStudent.group}
+                      onChange={(e) => handleStudentInputChange(e, false)}
+                      className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                      required
+                    >
+                      <option value="mpc">MPC</option>
+                      <option value="bipc">BiPC</option>
+                      <option value="cec">CEC</option>
+                      <option value="hec">HEC</option>
+                      <option value="thm">T&HM</option>
+                      <option value="oas">OAS</option>
+                      <option value="mphw">MPHW</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Medium</label>
+                    <select
+                      name="medium"
+                      value={currentStudent.medium}
+                      onChange={(e) => handleStudentInputChange(e, false)}
+                      className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                      required
+                    >
+                      <option value="english">English</option>
+                      <option value="telugu">Telugu</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Father's Name</label>
+                    <input
+                      type="text"
+                      name="father_name"
+                      value={currentStudent.father_name}
+                      onChange={(e) => handleStudentInputChange(e, false)}
+                      className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Date of Birth</label>
+                    <input
+                      type="date"
+                      name="date_of_birth"
+                      value={currentStudent.date_of_birth}
+                      onChange={(e) => handleStudentInputChange(e, false)}
+                      className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Caste</label>
+                    <input
+                      type="text"
+                      name="caste"
+                      value={currentStudent.caste}
+                      onChange={(e) => handleStudentInputChange(e, false)}
+                      className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300">Gender</label>
+                    <select
+                      name="gender"
+                      value={currentStudent.gender}
+                      onChange={(e) => handleStudentInputChange(e, false)}
+                      className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                      required
+                    >
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end space-x-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="px-4 py-2 bg-[#171010] text-white rounded-md hover:bg-[#362222]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-[#362222] text-white rounded-md hover:bg-[#423F3E]"
+                    disabled={loading}
+                  >
+                    {loading ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-[#171010]">
+      <Navbar />
+      
+      <main className="flex-1 container py-8 mx-auto px-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-between items-center mb-8 pb-4 border-b border-[#423F3E]">
+            <div>
+              <h1 className="text-3xl font-bold text-white">Student Management</h1>
+              <p className="mt-2 text-gray-300">Manage student information and records</p>
+            </div>
+            <Button 
+              onClick={() => setIsAddModalOpen(true)}
+              className="py-2 px-4 rounded-lg"
+              style={{ backgroundColor: '#362222', color: 'white' }}
+            >
+              Add New Student
+            </Button>
+          </div>
+          
+          {error && (
+            <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 rounded-lg mb-6">
+              {error}
+            </div>
+          )}
+          
+          {/* Filters */}
+          <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] p-4 mb-6">
+            <h3 className="text-white font-semibold mb-3">Filter Students</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-gray-300 text-sm mb-1">Year</label>
+                <select 
+                  value={filterYear}
+                  onChange={(e) => setFilterYear(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white"
+                >
+                  <option value="">All Years</option>
+                  <option value="1">1st Year</option>
+                  <option value="2">2nd Year</option>
+                  <option value="3">3rd Year</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-gray-300 text-sm mb-1">Group</label>
+                <select 
+                  value={filterGroup}
+                  onChange={(e) => setFilterGroup(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white"
+                >
+                  <option value="">All Groups</option>
+                  <option value="mpc">MPC</option>
+                  <option value="bipc">BiPC</option>
+                  <option value="cec">CEC</option>
+                  <option value="hec">HEC</option>
+                  <option value="thm">T&HM</option>
+                  <option value="oas">OAS</option>
+                  <option value="mphw">MPHW</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-gray-300 text-sm mb-1">Medium</label>
+                <select 
+                  value={filterMedium}
+                  onChange={(e) => setFilterMedium(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white"
+                >
+                  <option value="">All Mediums</option>
+                  <option value="english">English</option>
+                  <option value="telugu">Telugu</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          {/* Students Table */}
+          <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-[#423F3E]">
+                <thead className="bg-[#362222]">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Adm. No
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Year
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Group
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Medium
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Father's Name
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-[#2B2B2B] divide-y divide-[#423F3E]">
+                  {students.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-4 text-center text-gray-300">
+                        No students found. Add a new student or adjust your filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    students.map((student) => (
+                      <tr key={student.id} className="hover:bg-[#362222] cursor-pointer" onClick={() => fetchStudentDetails(student.id)}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
+                          {student.admission_number}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
+                          {student.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
+                          {student.year}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 capitalize">
+                          {student.group}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200 capitalize">
+                          {student.medium}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-200">
+                          {student.father_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentStudent(student);
+                              setIsEditModalOpen(true);
+                            }}
+                            className="text-white hover:text-indigo-300 mr-3"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentStudent(student);
+                              setIsDeleteModalOpen(true);
+                            }}
+                            className="text-red-500 hover:text-red-300"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+      
+      {/* Add Student Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#2B2B2B] rounded-lg shadow-xl border border-[#423F3E] p-6 max-w-2xl w-full overflow-y-auto max-h-[90vh]">
+            <h2 className="text-xl font-bold text-white mb-4">Add New Student</h2>
+            
+            <form onSubmit={handleCreateStudent}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Admission Number</label>
+                  <input
+                    type="text"
+                    name="admission_number"
+                    value={newStudent.admission_number}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={newStudent.name}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Year</label>
+                  <select
+                    name="year"
+                    value={newStudent.year}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  >
+                    <option value={1}>1st Year</option>
+                    <option value={2}>2nd Year</option>
+                    <option value={3}>3rd Year</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Group</label>
+                  <select
+                    name="group"
+                    value={newStudent.group}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  >
+                    <option value="mpc">MPC</option>
+                    <option value="bipc">BiPC</option>
+                    <option value="cec">CEC</option>
+                    <option value="hec">HEC</option>
+                    <option value="thm">T&HM</option>
+                    <option value="oas">OAS</option>
+                    <option value="mphw">MPHW</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Medium</label>
+                  <select
+                    name="medium"
+                    value={newStudent.medium}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  >
+                    <option value="english">English</option>
+                    <option value="telugu">Telugu</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Father's Name</label>
+                  <input
+                    type="text"
+                    name="father_name"
+                    value={newStudent.father_name}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Date of Birth</label>
+                  <input
+                    type="date"
+                    name="date_of_birth"
+                    value={newStudent.date_of_birth}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Caste</label>
+                  <input
+                    type="text"
+                    name="caste"
+                    value={newStudent.caste}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Gender</label>
+                  <select
+                    name="gender"
+                    value={newStudent.gender}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Aadhar Number</label>
+                  <input
+                    type="text"
+                    name="aadhar_number"
+                    value={newStudent.aadhar_number}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Student Phone (Optional)</label>
+                  <input
+                    type="text"
+                    name="student_phone"
+                    value={newStudent.student_phone}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Parent Phone</label>
+                  <input
+                    type="text"
+                    name="parent_phone"
+                    value={newStudent.parent_phone}
+                    onChange={(e) => handleStudentInputChange(e)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 bg-[#171010] text-white rounded-md hover:bg-[#362222]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#362222] text-white rounded-md hover:bg-[#423F3E]"
+                  disabled={loading}
+                >
+                  {loading ? 'Creating...' : 'Create Student'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {/* Edit Student Modal */}
+      {isEditModalOpen && currentStudent && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#2B2B2B] rounded-lg shadow-xl border border-[#423F3E] p-6 max-w-2xl w-full overflow-y-auto max-h-[90vh]">
+            <h2 className="text-xl font-bold text-white mb-4">Edit Student</h2>
+            
+            <form onSubmit={handleUpdateStudent}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Admission Number</label>
+                  <input
+                    type="text"
+                    name="admission_number"
+                    value={currentStudent.admission_number}
+                    onChange={(e) => handleStudentInputChange(e, false)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={currentStudent.name}
+                    onChange={(e) => handleStudentInputChange(e, false)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Year</label>
+                  <select
+                    name="year"
+                    value={currentStudent.year}
+                    onChange={(e) => handleStudentInputChange(e, false)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  >
+                    <option value={1}>1st Year</option>
+                    <option value={2}>2nd Year</option>
+                    <option value={3}>3rd Year</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Group</label>
+                  <select
+                    name="group"
+                    value={currentStudent.group}
+                    onChange={(e) => handleStudentInputChange(e, false)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  >
+                    <option value="mpc">MPC</option>
+                    <option value="bipc">BiPC</option>
+                    <option value="cec">CEC</option>
+                    <option value="hec">HEC</option>
+                    <option value="thm">T&HM</option>
+                    <option value="oas">OAS</option>
+                    <option value="mphw">MPHW</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Medium</label>
+                  <select
+                    name="medium"
+                    value={currentStudent.medium}
+                    onChange={(e) => handleStudentInputChange(e, false)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  >
+                    <option value="english">English</option>
+                    <option value="telugu">Telugu</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Father's Name</label>
+                  <input
+                    type="text"
+                    name="father_name"
+                    value={currentStudent.father_name}
+                    onChange={(e) => handleStudentInputChange(e, false)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Date of Birth</label>
+                  <input
+                    type="date"
+                    name="date_of_birth"
+                    value={currentStudent.date_of_birth}
+                    onChange={(e) => handleStudentInputChange(e, false)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Caste</label>
+                  <input
+                    type="text"
+                    name="caste"
+                    value={currentStudent.caste}
+                    onChange={(e) => handleStudentInputChange(e, false)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">Gender</label>
+                  <select
+                    name="gender"
+                    value={currentStudent.gender}
+                    onChange={(e) => handleStudentInputChange(e, false)}
+                    className="mt-1 block w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white focus:outline-none"
+                    required
+                  >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 bg-[#171010] text-white rounded-md hover:bg-[#362222]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#362222] text-white rounded-md hover:bg-[#423F3E]"
+                  disabled={loading}
+                >
+                  {loading ? 'Updating...' : 'Update Student'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && currentStudent && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#2B2B2B] rounded-lg shadow-xl border border-[#423F3E] p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold text-white mb-4">Confirm Delete</h2>
+            <p className="text-gray-300 mb-4">
+              Are you sure you want to delete the student <span className="font-semibold">{currentStudent.name}</span>? This action cannot be undone.
+            </p>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-4 py-2 bg-[#171010] text-white rounded-md hover:bg-[#362222]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteStudent}
+                className="px-4 py-2 bg-red-800 text-white rounded-md hover:bg-red-700"
+                disabled={loading}
+              >
+                {loading ? 'Deleting...' : 'Delete Student'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default StudentManagement; 

@@ -142,6 +142,29 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
+            
+            {/* Student Management Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out">
+                <Link to="/student-management" className="text-white">
+                  <h3 className="text-xl font-semibold mb-2">Student Management</h3>
+                  <p className="text-gray-300 mb-4">Manage student records, enrollments, and information</p>
+                  <span className="text-white flex items-center">
+                    Access Student Records <span className="ml-2">→</span>
+                  </span>
+                </Link>
+              </div>
+              
+              <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out">
+                <Link to="/attendance-management" className="text-white">
+                  <h3 className="text-xl font-semibold mb-2">Attendance Management</h3>
+                  <p className="text-gray-300 mb-4">Set working days, record attendance and view low attendance reports</p>
+                  <span className="text-white flex items-center">
+                    Manage Attendance <span className="ml-2">→</span>
+                  </span>
+                </Link>
+              </div>
+            </div>
           </>
         );
       
@@ -176,6 +199,29 @@ const Dashboard = () => {
                 <button className="w-full py-2 px-4 bg-[#362222] hover:bg-[#423F3E] text-white rounded-md transition-colors duration-300 text-left">
                   Assessment Tools
                 </button>
+              </div>
+            </div>
+            
+            {/* Student Management Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out">
+                <Link to="/student-management" className="text-white">
+                  <h3 className="text-xl font-semibold mb-2">Student Management</h3>
+                  <p className="text-gray-300 mb-4">Access and manage student information records</p>
+                  <span className="text-white flex items-center">
+                    View Students <span className="ml-2">→</span>
+                  </span>
+                </Link>
+              </div>
+              
+              <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out">
+                <Link to="/attendance-management" className="text-white">
+                  <h3 className="text-xl font-semibold mb-2">Attendance Management</h3>
+                  <p className="text-gray-300 mb-4">Record attendance and identify students with low attendance</p>
+                  <span className="text-white flex items-center">
+                    Record Attendance <span className="ml-2">→</span>
+                  </span>
+                </Link>
               </div>
             </div>
           </div>

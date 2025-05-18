@@ -1,13 +1,88 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { authService } from '../services/api';
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const isAuthenticated = localStorage.getItem('token') !== null;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [tokenExpiryTime, setTokenExpiryTime] = useState(null);
+  
+  useEffect(() => {
+    // Function to update token expiry time
+    const updateTokenExpiryTime = () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setTokenExpiryTime(null);
+        return;
+      }
+      
+      try {
+        // Decode token to get expiry time
+        const payload = token.split('.')[1];
+        const decodedPayload = JSON.parse(atob(payload));
+        
+        if (decodedPayload.exp) {
+          const expiryDate = new Date(decodedPayload.exp * 1000);
+          const now = new Date();
+          
+          // Calculate time remaining
+          const timeRemaining = expiryDate - now;
+          
+          if (timeRemaining <= 0) {
+            // Token has expired
+            authService.logout();
+            navigate('/login');
+            return;
+          }
+          
+          // Set the expiry time in state
+          setTokenExpiryTime(expiryDate);
+        }
+      } catch (error) {
+        console.error('Error decoding token:', error);
+        setTokenExpiryTime(null);
+      }
+    };
+    
+    // Update token expiry time on component mount
+    updateTokenExpiryTime();
+    
+    // Set up interval to update token expiry time every minute
+    const intervalId = setInterval(updateTokenExpiryTime, 60000);
+    
+    // Clean up interval on component unmount
+    return () => clearInterval(intervalId);
+  }, [navigate]);
+  
+  // Format the token expiry time for display
+  const formatExpiryTime = () => {
+    if (!tokenExpiryTime) return '';
+    
+    const now = new Date();
+    const timeRemaining = tokenExpiryTime - now;
+    
+    // Convert to minutes and hours
+    const totalMinutes = Math.floor(timeRemaining / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else {
+      return `${minutes}m`;
+    }
+  };
   
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+  
+  const handleLogout = (e) => {
+    e.preventDefault();
+    authService.logout();
+    window.location.href = '/';
   };
   
   return (
@@ -50,13 +125,17 @@ const Navbar = () => {
                 >
                   Dashboard
                 </Link>
+                
+                {/* Session expiry indicator */}
+                {tokenExpiryTime && (
+                  <div className="px-3 py-1 bg-[#362222] text-white text-xs rounded-md" title="Time until session expires">
+                    Session: {formatExpiryTime()}
+                  </div>
+                )}
+                
                 <Link 
                   to="/" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    localStorage.removeItem('token');
-                    window.location.href = '/';
-                  }}
+                  onClick={handleLogout}
                   className="flex items-center text-gray-300 hover:text-white font-medium ml-4 px-4 py-2 rounded-lg"
                   style={{ backgroundColor: '#423F3E' }}
                 >
@@ -131,11 +210,19 @@ const Navbar = () => {
                 >
                   Dashboard
                 </Link>
+                
+                {/* Session expiry indicator for mobile */}
+                {tokenExpiryTime && (
+                  <div className="py-2 text-xs text-center text-white border-b border-[#423F3E]">
+                    Session: {formatExpiryTime()}
+                  </div>
+                )}
+                
                 <Link 
                   to="/" 
                   onClick={(e) => {
                     e.preventDefault();
-                    localStorage.removeItem('token');
+                    authService.logout();
                     window.location.href = '/';
                     setIsMobileMenuOpen(false);
                   }}

@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 // Register import is commented out as registration is disabled
-// import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Home from './pages/Home';
 import Faculty from './pages/Faculty';
@@ -10,34 +9,12 @@ import Gallery from './pages/Gallery';
 import UserManagement from './pages/UserManagement';
 import AnnouncementManagement from './pages/AnnouncementManagement';
 import StaffManagement from './pages/StaffManagement';
+import StudentManagement from './pages/StudentManagement';
+import AttendanceManagement from './pages/AttendanceManagement';
 import Announcements from './pages/Announcements';
-import { authService } from './services/api';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
-  // Check if user is logged in
-  const isAuthenticated = () => {
-    return localStorage.getItem('token') !== null;
-  };
-
-  // Check if user has required role
-  const hasRole = (role) => {
-    return authService.hasRole(role);
-  };
-
-  // Protected route component
-  const ProtectedRoute = ({ children, requiredRole = null }) => {
-    if (!isAuthenticated()) {
-      return <Navigate to="/login" />;
-    }
-    
-    // If a specific role is required, check it
-    if (requiredRole && !hasRole(requiredRole)) {
-      return <Navigate to="/" />;
-    }
-    
-    return children;
-  };
-
   return (
     <Router>
       <Routes>
@@ -96,6 +73,26 @@ function App() {
           element={
             <ProtectedRoute requiredRole="principal">
               <StaffManagement />
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Student Management - Principal and Staff */}
+        <Route 
+          path="/student-management" 
+          element={
+            <ProtectedRoute requiredRole="staff">
+              <StudentManagement />
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Attendance Management - Principal and Staff */}
+        <Route 
+          path="/attendance-management" 
+          element={
+            <ProtectedRoute requiredRole="staff">
+              <AttendanceManagement />
             </ProtectedRoute>
           } 
         />

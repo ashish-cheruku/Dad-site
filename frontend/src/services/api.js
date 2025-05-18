@@ -2,6 +2,33 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:8004';
 
+// Token expiration handling
+const checkTokenExpiration = () => {
+  const token = localStorage.getItem('token');
+  if (!token) return false;
+  
+  try {
+    // JWT tokens consist of three parts: header.payload.signature
+    const payload = token.split('.')[1];
+    // The payload is base64 encoded, decode it
+    const decodedPayload = JSON.parse(atob(payload));
+    // Check if the token has expired
+    const currentTime = Math.floor(Date.now() / 1000); // Convert to seconds
+    
+    if (decodedPayload.exp && decodedPayload.exp < currentTime) {
+      // Token has expired, log the user out
+      console.log('Token expired, logging out');
+      authService.logout();
+      window.location.href = '/login'; // Redirect to login page
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Error checking token expiration:', error);
+    return false;
+  }
+};
+
 // Create axios instance
 const api = axios.create({
   baseURL: API_URL,
@@ -15,11 +42,32 @@ api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
+      // Check if token is expired before making the request
+      if (!checkTokenExpiration()) {
+        // If token is expired, this will redirect to login
+        return Promise.reject(new Error('Token expired'));
+      }
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     return config;
   },
   (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor to handle 401 Unauthorized responses
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // If the server returns a 401, log the user out
+      console.log('Unauthorized response, logging out');
+      authService.logout();
+      window.location.href = '/login';
+    }
     return Promise.reject(error);
   }
 );
@@ -175,6 +223,11 @@ export const authService = {
     } catch (error) {
       throw error.response ? error.response.data : { detail: 'Network error' };
     }
+  },
+
+  // Check if token is valid and not expired
+  isTokenValid: () => {
+    return checkTokenExpiration();
   }
 };
 
@@ -258,6 +311,148 @@ export const facultyService = {
     try {
       await api.delete(`/faculty/${id}`);
       return true;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  }
+};
+
+// Student service
+export const studentService = {
+  // Get all students with optional filtering
+  getAllStudents: async (year = null, group = null, medium = null) => {
+    try {
+      let url = '/students';
+      const params = new URLSearchParams();
+      
+      if (year !== null) params.append('year', year);
+      if (group !== null) params.append('group', group);
+      if (medium !== null) params.append('medium', medium);
+      
+      const queryString = params.toString();
+      if (queryString) url += `?${queryString}`;
+      
+      const response = await api.get(url);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Get a specific student by ID
+  getStudent: async (studentId) => {
+    try {
+      const response = await api.get(`/students/${studentId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Create a new student
+  createStudent: async (studentData) => {
+    try {
+      const response = await api.post('/students', studentData);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Update an existing student
+  updateStudent: async (studentId, studentData) => {
+    try {
+      const response = await api.put(`/students/${studentId}`, studentData);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Delete a student
+  deleteStudent: async (studentId) => {
+    try {
+      await api.delete(`/students/${studentId}`);
+      return true;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  }
+};
+
+// Attendance service
+export const attendanceService = {
+  // Set working days for a month (Principal only)
+  setWorkingDays: async (month, academicYear, workingDays) => {
+    try {
+      const response = await api.post('/attendance/working-days', {
+        month,
+        academic_year: academicYear,
+        working_days: workingDays
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Get working days for a month
+  getWorkingDays: async (academicYear, month) => {
+    try {
+      const response = await api.get(`/attendance/working-days/${academicYear}/${month}`);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Update student attendance
+  updateStudentAttendance: async (studentId, academicYear, month, daysPresent) => {
+    try {
+      const response = await api.put(`/attendance/student/${studentId}/${academicYear}/${month}`, {
+        days_present: daysPresent
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Get attendance for a specific student
+  getStudentAttendance: async (studentId, academicYear, month) => {
+    try {
+      const response = await api.get(`/attendance/student/${studentId}/${academicYear}/${month}`);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Get attendance for all students in a class
+  getClassAttendance: async (year, group, academicYear, month) => {
+    try {
+      const response = await api.get(`/attendance/class/${year}/${group}/${academicYear}/${month}`);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Get students with attendance below threshold
+  getStudentsWithLowAttendance: async (academicYear, month, percentageThreshold, year = null, group = null) => {
+    try {
+      let url = `/attendance/low-attendance/${academicYear}/${month}?percentage_threshold=${percentageThreshold}`;
+      
+      if (year !== null) {
+        url += `&year=${year}`;
+      }
+      
+      if (group !== null) {
+        url += `&group=${group}`;
+      }
+      
+      const response = await api.get(url);
+      return response.data;
     } catch (error) {
       throw error.response ? error.response.data : { detail: 'Network error' };
     }
