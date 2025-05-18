@@ -13,7 +13,7 @@ const AttendanceManagement = () => {
   const [selectedYear, setSelectedYear] = useState('1');
   const [selectedGroup, setSelectedGroup] = useState('mpc');
   const [selectedMonth, setSelectedMonth] = useState('january');
-  const [academicYear, setAcademicYear] = useState('2023-2024');
+  const [academicYear, setAcademicYear] = useState('2024-2025');
   
   // Working days state (for principal)
   const [workingDays, setWorkingDays] = useState(0);
@@ -367,8 +367,8 @@ const AttendanceManagement = () => {
                   onChange={(e) => setAcademicYear(e.target.value)}
                   className="w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white"
                 >
-                  <option value="2023-2024">2023-2024</option>
                   <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
                 </select>
               </div>
             </div>
