@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { authService } from '../services/api';
 import { Button } from '../components/ui/button';
 import Navbar from '../components/Navbar';
@@ -11,6 +11,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     // Fetch user data when component mounts
@@ -20,14 +21,15 @@ const Dashboard = () => {
         const userData = await authService.getCurrentUser();
         setUser(userData);
         
-        // If user is principal, fetch principal dashboard data
-        if (userData.role === 'principal') {
+        // Determine data to fetch based on current route or user role
+        const currentPath = location.pathname;
+        
+        if (currentPath.includes('principal') || userData.role === 'principal') {
           const principalData = await authService.getPrincipalDashboard();
           setPrincipalStats(principalData.statistics);
         }
         
-        // If user is staff or principal, fetch staff dashboard data
-        if (userData.role === 'staff' || userData.role === 'principal') {
+        if (currentPath.includes('staff') || userData.role === 'staff') {
           const staffDashboardData = await authService.getStaffDashboard();
           setStaffData(staffDashboardData);
         }
@@ -40,7 +42,7 @@ const Dashboard = () => {
     };
 
     fetchUserData();
-  }, []);
+  }, [location]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');

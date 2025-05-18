@@ -25,6 +25,10 @@ app.include_router(users_routes.router, prefix="/users", tags=["Users"])
 app.include_router(announcements_routes.router, prefix="/announcements", tags=["Announcements"])
 app.include_router(faculty_routes.router, prefix="/faculty", tags=["Faculty"])
 app.include_router(dashboard_routes.router, prefix="/dashboard", tags=["Dashboards"])
+# Also include dashboard routes with "principal" prefix for backward compatibility
+app.include_router(dashboard_routes.router, prefix="/principal", tags=["Dashboards"])
+# Also include dashboard routes with "staff" prefix
+app.include_router(dashboard_routes.router, prefix="/staff", tags=["Dashboards"])
 
 @app.get("/")
 async def root():

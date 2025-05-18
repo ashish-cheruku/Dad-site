@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -11,6 +11,23 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userRole = localStorage.getItem('userRole');
+    
+    if (token && userRole) {
+      // Redirect based on role
+      if (userRole === 'principal') {
+        navigate('/principal/dashboard');
+      } else if (userRole === 'staff') {
+        navigate('/staff/dashboard');
+      } else {
+        navigate('/dashboard');
+      }
+    }
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -146,9 +163,6 @@ const Login = () => {
                 <Label htmlFor="password" className="text-gray-300">
                   Password
                 </Label>
-                <Link to="#" className="text-xs text-gray-300 hover:text-white">
-                  Forgot password?
-                </Link>
               </div>
               <Input
                 id="password"
@@ -197,10 +211,9 @@ const Login = () => {
           </form>
           
           <div className="mt-6 text-center text-sm">
-            <span className="text-gray-400">Don't have an account? </span>
-            <Link to="/register" className="font-medium hover:text-gray-200 text-white">
-              Create an account
-            </Link>
+            <span className="text-gray-400">
+              Contact administrator for an account
+            </span>
           </div>
         </div>
       </div>

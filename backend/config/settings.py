@@ -2,7 +2,8 @@ import os
 from datetime import timedelta
 
 # MongoDB Configuration
-MONGODB_URL = "mongodb+srv://ashishcheruku:2FZEhb4kIQZmvp28@cluster0.d4x4s0c.mongodb.net/"
+# This is the current connection string
+MONGODB_URL = "mongodb+srv://gjcvemulawada:8Qe280Xl5e5jYHwA@cluster0.qitynax.mongodb.net/user_auth_db"
 DATABASE_NAME = "user_auth_db"
 
 # Collections

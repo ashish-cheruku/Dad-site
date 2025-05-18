@@ -50,10 +50,19 @@ export const authService = {
       formData.append('username', username);
       formData.append('password', password);
 
+      // Get the headers ready - include Authorization if token exists
+      const headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      };
+      
+      // Add token to request if it exists (will trigger "already logged in" error)
+      const token = localStorage.getItem('token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await axios.post(`${API_URL}/token`, formData.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+        headers: headers,
       });
 
       console.log('Login response:', response.data);

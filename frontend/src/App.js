@@ -1,7 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
-import Register from './pages/Register';
+// Register import is commented out as registration is disabled
+// import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Home from './pages/Home';
 import Faculty from './pages/Faculty';
@@ -43,7 +44,8 @@ function App() {
         {/* Public routes */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        {/* Registration is disabled - redirect to login */}
+        <Route path="/register" element={<Navigate to="/login" />} />
         <Route path="/faculty" element={<Faculty />} />
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/announcements" element={<Announcements />} />
@@ -60,7 +62,7 @@ function App() {
 
         {/* Principal-only routes */}
         <Route 
-          path="/principal/*" 
+          path="/principal/dashboard" 
           element={
             <ProtectedRoute requiredRole="principal">
               <Dashboard />
@@ -100,7 +102,7 @@ function App() {
 
         {/* Staff-only routes */}
         <Route 
-          path="/staff/*" 
+          path="/staff/dashboard" 
           element={
             <ProtectedRoute requiredRole="staff">
               <Dashboard />
