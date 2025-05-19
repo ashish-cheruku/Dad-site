@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { studentService, attendanceService } from '../services/api';
 import Navbar from '../components/Navbar';
 import { Button } from '../components/ui/button';
@@ -32,14 +32,6 @@ const StudentManagement = () => {
   const [currentAcademicYear, setCurrentAcademicYear] = useState('2024-2025');
   const [selectedMonth, setSelectedMonth] = useState('january');
 
-  // View mode state (normal list or comprehensive table)
-  const [viewMode, setViewMode] = useState('list');
-  
-  // Student attendance for comprehensive view
-  const [studentsWithAttendance, setStudentsWithAttendance] = useState([]);
-  const [loadingComprehensiveData, setLoadingComprehensiveData] = useState(false);
-  const [allMonthsAttendance, setAllMonthsAttendance] = useState({});
-
   // New student form state
   const [newStudent, setNewStudent] = useState({
     admission_number: '',
@@ -62,6 +54,7 @@ const StudentManagement = () => {
     'july', 'august', 'september', 'october', 'november', 'december'
   ];
 
+  // Now define fetchStudents after the functions it depends on
   const fetchStudents = useCallback(async () => {
     try {
       setLoading(true);
@@ -84,198 +77,13 @@ const StudentManagement = () => {
       }
       
       setStudents(filteredData);
-      
-      // If in comprehensive view, fetch attendance data for all students
-      if (viewMode === 'table') {
-        await fetchAllStudentsAttendance(filteredData);
-      }
     } catch (err) {
       setError('Failed to fetch students');
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [filterYear, filterGroup, filterMedium, searchTerm, viewMode]);
-  
-  // Fetch attendance data for all students in the list
-  const fetchAllStudentsAttendance = useCallback(async (studentsList) => {
-    try {
-      setLoadingComprehensiveData(true);
-      const studentsData = [...studentsList];
-      const allAttendanceData = {};
-      
-      // Process students in larger batches to reduce the number of render cycles
-      const batchSize = 10; // Increased from 3 to 10
-      
-      // Create a month-student mapping to optimize API calls
-      const monthsToFetch = {};
-      
-      // Initialize all student attendance data
-      for (const student of studentsData) {
-        student.monthlyAttendance = {};
-        allAttendanceData[student.id] = {};
-        
-        // Only fetch attendance for January initially (to show something quickly)
-        monthsToFetch[student.id] = ['january'];
-      }
-      
-      // Set initial data with just January to show something quickly
-      setStudentsWithAttendance(studentsData);
-      setAllMonthsAttendance(allAttendanceData);
-      
-      // Process initial batch with just January data
-      for (let i = 0; i < studentsData.length; i += batchSize) {
-        const batch = studentsData.slice(i, i + batchSize);
-        
-        await Promise.all(
-          batch.map(async (student) => {
-            try {
-              const monthToFetch = 'january';
-              const attendanceData = await attendanceService.getStudentAttendance(
-                student.id,
-                currentAcademicYear,
-                monthToFetch
-              );
-              
-              // Store in student object
-              student.monthlyAttendance[monthToFetch] = {
-                working_days: attendanceData.working_days || 0,
-                days_present: attendanceData.days_present || 0,
-                attendance_percentage: attendanceData.attendance_percentage || 0
-              };
-              
-              // Also store in global state
-              allAttendanceData[student.id][monthToFetch] = {
-                working_days: attendanceData.working_days || 0,
-                days_present: attendanceData.days_present || 0,
-                attendance_percentage: attendanceData.attendance_percentage || 0
-              };
-            } catch (error) {
-              console.error(`Error fetching attendance for student ${student.id}:`, error);
-              student.monthlyAttendance['january'] = {
-                working_days: 0,
-                days_present: 0,
-                attendance_percentage: 0
-              };
-              allAttendanceData[student.id]['january'] = {
-                working_days: 0,
-                days_present: 0,
-                attendance_percentage: 0
-              };
-            }
-            
-            // Calculate initial annual summary based on just January
-            calculateStudentAnnualSummary(student);
-          })
-        );
-        
-        // Update state after each batch to show progress
-        setStudentsWithAttendance([...studentsData]);
-        setAllMonthsAttendance({...allAttendanceData});
-      }
-      
-      // Mark that initial data is loaded
-      setLoadingComprehensiveData(false);
-      
-      // Now fetch the rest of the months in the background
-      fetchRemainingMonthsData(studentsData, allAttendanceData);
-      
-    } catch (err) {
-      console.error('Error fetching attendance data:', err);
-      setLoadingComprehensiveData(false);
-    }
-  }, [currentAcademicYear]);
-  
-  // Helper function to calculate annual summary for a student
-  const calculateStudentAnnualSummary = (student) => {
-    let totalWorkingDays = 0;
-    let totalDaysPresent = 0;
-    let totalMonthsWithData = 0;
-    
-    for (const month of months) {
-      const monthData = student.monthlyAttendance[month];
-      if (monthData && monthData.working_days > 0) {
-        totalWorkingDays += monthData.working_days;
-        totalDaysPresent += monthData.days_present;
-        totalMonthsWithData++;
-      }
-    }
-    
-    // Add annual summary to student object
-    student.attendance = {
-      working_days: totalWorkingDays,
-      days_present: totalDaysPresent,
-      attendance_percentage: totalWorkingDays > 0 
-        ? (totalDaysPresent / totalWorkingDays) * 100 
-        : 0
-    };
-  };
-  
-  // Fetch the rest of the months' data in the background after showing initial data
-  const fetchRemainingMonthsData = async (studentsData, allAttendanceData) => {
-    const batchSize = 5; // Process 5 students at a time
-    const remainingMonths = months.filter(month => month !== 'january');
-    
-    try {
-      // Process students in batches
-      for (let i = 0; i < studentsData.length; i += batchSize) {
-        const studentBatch = studentsData.slice(i, i + batchSize);
-        
-        // For each student in the batch, fetch all remaining months
-        await Promise.all(
-          studentBatch.map(async (student) => {
-            // Process each remaining month
-            await Promise.all(
-              remainingMonths.map(async (month) => {
-                try {
-                  const attendanceData = await attendanceService.getStudentAttendance(
-                    student.id,
-                    currentAcademicYear,
-                    month
-                  );
-                  
-                  // Store in student object
-                  student.monthlyAttendance[month] = {
-                    working_days: attendanceData.working_days || 0,
-                    days_present: attendanceData.days_present || 0,
-                    attendance_percentage: attendanceData.attendance_percentage || 0
-                  };
-                  
-                  // Also store in global state
-                  allAttendanceData[student.id][month] = {
-                    working_days: attendanceData.working_days || 0,
-                    days_present: attendanceData.days_present || 0,
-                    attendance_percentage: attendanceData.attendance_percentage || 0
-                  };
-                } catch (error) {
-                  console.error(`Error fetching attendance for student ${student.id} month ${month}:`, error);
-                  student.monthlyAttendance[month] = {
-                    working_days: 0,
-                    days_present: 0,
-                    attendance_percentage: 0
-                  };
-                  allAttendanceData[student.id][month] = {
-                    working_days: 0,
-                    days_present: 0,
-                    attendance_percentage: 0
-                  };
-                }
-              })
-            );
-            
-            // Recalculate annual summary with all months
-            calculateStudentAnnualSummary(student);
-          })
-        );
-        
-        // Update the state after each batch to show progress
-        setStudentsWithAttendance([...studentsData]);
-        setAllMonthsAttendance({...allAttendanceData});
-      }
-    } catch (err) {
-      console.error('Error fetching remaining months data:', err);
-    }
-  };
+  }, [filterYear, filterGroup, filterMedium, searchTerm]);
   
   // Fetch student details and attendance
   const fetchStudentDetails = async (studentId) => {
@@ -318,27 +126,12 @@ const StudentManagement = () => {
     fetchStudents();
   }, [filterYear, filterGroup, filterMedium, fetchStudents]);
   
-  // Refetch attendance data when view mode or academic year changes
-  useEffect(() => {
-    if (viewMode === 'table' && students.length > 0) {
-      fetchAllStudentsAttendance(students);
-    }
-  }, [viewMode, currentAcademicYear, students, fetchAllStudentsAttendance]);
-
   // Refetch attendance when month or academic year changes for individual student view
   useEffect(() => {
     if (studentDetails && showStudentInfo) {
       fetchStudentAttendance(studentDetails.id);
     }
   }, [selectedMonth, currentAcademicYear, studentDetails, showStudentInfo, fetchStudentAttendance]);
-
-  // Memoize the filtered students in the table view for better performance
-  const filteredStudentsWithAttendance = useMemo(() => {
-    if (viewMode !== 'table') return [];
-    
-    // Return the full list of students with attendance data
-    return studentsWithAttendance;
-  }, [studentsWithAttendance, viewMode]);
 
   // Handle input change for new/edit student form
   const handleStudentInputChange = (e, isNew = true) => {
@@ -530,9 +323,6 @@ const StudentManagement = () => {
     }
 
     try {
-      // Define if we're exporting basic student info or comprehensive data with attendance
-      const isComprehensiveExport = viewMode === 'table';
-      
       // Basic headers for student information
       const headers = [
         'Admission Number',
@@ -551,88 +341,29 @@ const StudentManagement = () => {
       
       let data = [];
       
-      if (isComprehensiveExport && studentsWithAttendance.length > 0) {
-        // For comprehensive view, include attendance data
-        const attendanceHeaders = [];
+      // For basic view, just include student info
+      // Add headers row
+      data.push(headers);
+      
+      // Add data for each student
+      students.forEach(student => {
+        const studentRow = [
+          student.admission_number,
+          student.name,
+          student.year,
+          capitalize(student.group),
+          capitalize(student.medium),
+          student.father_name || '',
+          formatDate(student.date_of_birth) || '',
+          student.caste || '',
+          capitalize(student.gender) || '',
+          student.aadhar_number || '',
+          student.student_phone || '',
+          student.parent_phone || ''
+        ];
         
-        // Add month headers for attendance (P, W, %)
-        months.forEach(month => {
-          attendanceHeaders.push(`${capitalize(month)} - Present`);
-          attendanceHeaders.push(`${capitalize(month)} - Working Days`);
-          attendanceHeaders.push(`${capitalize(month)} - Percentage`);
-        });
-        
-        // Add annual summary header
-        attendanceHeaders.push('Annual Attendance %');
-        
-        // Combine all headers
-        const allHeaders = [...headers, ...attendanceHeaders];
-        
-        // Add headers row
-        data.push(allHeaders);
-        
-        // Add data for each student with attendance
-        studentsWithAttendance.forEach(student => {
-          const studentRow = [
-            student.admission_number,
-            student.name,
-            student.year,
-            capitalize(student.group),
-            capitalize(student.medium),
-            student.father_name || '',
-            formatDate(student.date_of_birth) || '',
-            student.caste || '',
-            capitalize(student.gender) || '',
-            student.aadhar_number || '',
-            student.student_phone || '',
-            student.parent_phone || ''
-          ];
-          
-          // Add attendance data for each month
-          months.forEach(month => {
-            const monthData = student.monthlyAttendance?.[month] || {
-              days_present: 0,
-              working_days: 0,
-              attendance_percentage: 0
-            };
-            
-            studentRow.push(monthData.days_present);
-            studentRow.push(monthData.working_days);
-            studentRow.push(monthData.attendance_percentage ? 
-              Number(monthData.attendance_percentage.toFixed(1)) : 0);
-          });
-          
-          // Add annual attendance percentage
-          studentRow.push(student.attendance?.attendance_percentage ? 
-            Number(student.attendance.attendance_percentage.toFixed(1)) : 0);
-          
-          data.push(studentRow);
-        });
-      } else {
-        // For basic view, just include student info
-        // Add headers row
-        data.push(headers);
-        
-        // Add data for each student
-        students.forEach(student => {
-          const studentRow = [
-            student.admission_number,
-            student.name,
-            student.year,
-            capitalize(student.group),
-            capitalize(student.medium),
-            student.father_name || '',
-            formatDate(student.date_of_birth) || '',
-            student.caste || '',
-            capitalize(student.gender) || '',
-            student.aadhar_number || '',
-            student.student_phone || '',
-            student.parent_phone || ''
-          ];
-          
-          data.push(studentRow);
-        });
-      }
+        data.push(studentRow);
+      });
       
       // Create worksheet from data
       const ws = XLSX.utils.aoa_to_sheet(data);
@@ -641,103 +372,18 @@ const StudentManagement = () => {
       const colWidths = [];
       headers.forEach(() => colWidths.push({ wch: 15 })); // Standard width for basic columns
       
-      if (isComprehensiveExport) {
-        months.forEach(() => {
-          colWidths.push({ wch: 10 }); // Width for present
-          colWidths.push({ wch: 10 }); // Width for working days
-          colWidths.push({ wch: 10 }); // Width for percentage
-        });
-        colWidths.push({ wch: 15 }); // Width for annual
-      }
-      
       ws['!cols'] = colWidths;
       
       // Create workbook and add the worksheet
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(
-        wb, 
-        ws, 
-        isComprehensiveExport ? 'Students with Attendance' : 'Students'
-      );
+      XLSX.utils.book_append_sheet(wb, ws, 'Students');
       
       // Generate Excel file
       const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       
       // Save file
-      saveAs(
-        blob, 
-        `students_export_${viewMode === 'table' ? 'with_attendance_' : ''}${new Date().toISOString().slice(0, 10)}.xlsx`
-      );
-    } catch (err) {
-      setError('Failed to export student data');
-      console.error(err);
-    }
-  };
-
-  // Old CSV export function kept for reference or backup
-  const exportToCSV = () => {
-    // Only export if there are students
-    if (students.length === 0) {
-      setError('No students to export');
-      return;
-    }
-
-    try {
-      // Define CSV headers based on student properties
-      const headers = [
-        'Admission Number',
-        'Name',
-        'Year',
-        'Group',
-        'Medium',
-        'Father Name',
-        'Date of Birth',
-        'Caste',
-        'Gender',
-        'Aadhar Number',
-        'Student Phone',
-        'Parent Phone'
-      ];
-
-      // Convert student data to CSV format
-      const csvData = students.map(student => [
-        student.admission_number,
-        student.name,
-        student.year,
-        capitalize(student.group),
-        capitalize(student.medium),
-        student.father_name || '',
-        formatDate(student.date_of_birth) || '',
-        student.caste || '',
-        capitalize(student.gender) || '',
-        student.aadhar_number || '',
-        student.student_phone || '',
-        student.parent_phone || ''
-      ]);
-
-      // Create CSV content
-      let csvContent = headers.join(',') + '\n';
-      csvContent += csvData.map(row => 
-        row.map(cell => {
-          // Handle cells that may contain commas or quotes
-          if (cell && (cell.includes(',') || cell.includes('"'))) {
-            return `"${cell.replace(/"/g, '""')}"`;
-          }
-          return cell;
-        }).join(',')
-      ).join('\n');
-
-      // Create blob and download link
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `students_export_${new Date().toISOString().slice(0, 10)}.csv`);
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      saveAs(blob, `students_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (err) {
       setError('Failed to export student data');
       console.error(err);
@@ -1224,37 +870,14 @@ const StudentManagement = () => {
             </div>
           </div>
           
-          {/* View Mode Switch */}
+          {/* View Mode Switch - Removing comprehensive table option */}
           <div className="flex justify-between items-center mb-6">
-            <div className="inline-flex rounded-md shadow-sm" role="group">
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
-                  viewMode === 'list'
-                    ? 'bg-[#362222] text-white'
-                    : 'bg-[#1e1e1e] text-gray-300 hover:bg-[#262626]'
-                }`}
-              >
-                Basic List
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
-                  viewMode === 'table'
-                    ? 'bg-[#362222] text-white'
-                    : 'bg-[#1e1e1e] text-gray-300 hover:bg-[#262626]'
-                }`}
-              >
-                Comprehensive Table
-              </button>
-            </div>
+            <div></div>
             <div className="flex items-center gap-3">
               <button
                 onClick={exportToExcel}
                 className="px-4 py-2 bg-[#362222] text-white rounded-lg hover:bg-[#423F3E] text-sm flex items-center"
-                title={viewMode === 'table' ? 'Export to Excel with Attendance Data' : 'Export to Excel'}
+                title="Export to Excel"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -1292,329 +915,135 @@ const StudentManagement = () => {
             </div>
           )}
           
-          {/* Academic Year selector for comprehensive view */}
-          {viewMode === 'table' && (
-            <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] p-3 mb-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
-                <h3 className="text-white font-semibold mb-2 sm:mb-0">Academic Year</h3>
-                <div className="flex items-center">
-                  <select
-                    value={currentAcademicYear}
-                    onChange={(e) => setCurrentAcademicYear(e.target.value)}
-                    className="px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white"
-                  >
-                    <option value="2024-2025">2024-2025</option>
-                    <option value="2025-2026">2025-2026</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-          
           {/* Basic Student List */}
-          {viewMode === 'list' && (
-            <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-[#423F3E]">
-                  <thead className="bg-[#362222]">
+          <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-[#423F3E]">
+                <thead className="bg-[#362222]">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 text-[#362222] bg-[#171010] border-[#423F3E] rounded focus:ring-0"
+                        checked={students.length > 0 && selectedStudents.length === students.length}
+                        onChange={handleSelectAllStudents}
+                      />
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Admission No.
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Year
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Group
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Medium
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-[#2B2B2B] divide-y divide-[#423F3E]">
+                  {students.length === 0 ? (
                     <tr>
-                      <th scope="col" className="px-4 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 text-[#362222] bg-[#171010] border-[#423F3E] rounded focus:ring-0"
-                          checked={students.length > 0 && selectedStudents.length === students.length}
-                          onChange={handleSelectAllStudents}
-                        />
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                        Admission No.
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                        Name
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                        Year
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                        Group
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                        Medium
-                      </th>
-                      <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                        Actions
-                      </th>
+                      <td colSpan="7" className="px-4 py-4 text-center text-gray-300">
+                        No students found. Add a new student or adjust your filters.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="bg-[#2B2B2B] divide-y divide-[#423F3E]">
-                    {students.length === 0 ? (
-                      <tr>
-                        <td colSpan="7" className="px-4 py-4 text-center text-gray-300">
-                          No students found. Add a new student or adjust your filters.
+                  ) : (
+                    students.map((student) => (
+                      <tr key={student.id} className="hover:bg-[#362222]">
+                        <td className="px-4 py-4 whitespace-nowrap text-center">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 text-[#362222] bg-[#171010] border-[#423F3E] rounded focus:ring-0"
+                            checked={selectedStudents.includes(student.id)}
+                            onChange={() => handleSelectStudent(student.id)}
+                          />
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200">
+                          {student.admission_number}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200">
+                          {student.name}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200">
+                          {student.year}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200 capitalize">
+                          {student.group}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200 capitalize">
+                          {student.medium}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200 text-right">
+                          <div className="flex justify-end space-x-2">
+                            <button
+                              onClick={() => fetchStudentDetails(student.id)}
+                              className="px-2 py-1 bg-[#171010] text-white rounded-md hover:bg-[#362222] text-xs"
+                              title="View Details"
+                            >
+                              View
+                            </button>
+                            <button
+                              onClick={() => {
+                                setCurrentStudent(student);
+                                setIsEditModalOpen(true);
+                              }}
+                              className="px-2 py-1 bg-[#362222] text-white rounded-md hover:bg-[#423F3E] text-xs"
+                              title="Edit Student"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => {
+                                setCurrentStudent(student);
+                                setIsDeleteModalOpen(true);
+                              }}
+                              className="px-2 py-1 bg-red-800 text-white rounded-md hover:bg-red-700 text-xs"
+                              title="Delete Student"
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
-                    ) : (
-                      students.map((student) => (
-                        <tr key={student.id} className="hover:bg-[#362222]">
-                          <td className="px-4 py-4 whitespace-nowrap text-center">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 text-[#362222] bg-[#171010] border-[#423F3E] rounded focus:ring-0"
-                              checked={selectedStudents.includes(student.id)}
-                              onChange={() => handleSelectStudent(student.id)}
-                            />
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200">
-                            {student.admission_number}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200">
-                            {student.name}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200">
-                            {student.year}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200 capitalize">
-                            {student.group}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200 capitalize">
-                            {student.medium}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-200 text-right">
-                            <div className="flex justify-end space-x-2">
-                              <button
-                                onClick={() => fetchStudentDetails(student.id)}
-                                className="px-2 py-1 bg-[#171010] text-white rounded-md hover:bg-[#362222] text-xs"
-                                title="View Details"
-                              >
-                                View
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCurrentStudent(student);
-                                  setIsEditModalOpen(true);
-                                }}
-                                className="px-2 py-1 bg-[#362222] text-white rounded-md hover:bg-[#423F3E] text-xs"
-                                title="Edit Student"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCurrentStudent(student);
-                                  setIsDeleteModalOpen(true);
-                                }}
-                                className="px-2 py-1 bg-red-800 text-white rounded-md hover:bg-red-700 text-xs"
-                                title="Delete Student"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* Pagination - Placeholder for future implementation */}
+            <div className="px-4 py-3 bg-[#202020] flex items-center justify-between border-t border-[#423F3E]">
+              <div className="flex-1 flex justify-between sm:hidden">
+                <button className="px-3 py-1 bg-[#362222] text-white rounded-md text-sm hover:bg-[#423F3E] disabled:opacity-50" disabled>
+                  Previous
+                </button>
+                <button className="px-3 py-1 bg-[#362222] text-white rounded-md text-sm hover:bg-[#423F3E] disabled:opacity-50" disabled>
+                  Next
+                </button>
               </div>
-              
-              {/* Pagination - Placeholder for future implementation */}
-              <div className="px-4 py-3 bg-[#202020] flex items-center justify-between border-t border-[#423F3E]">
-                <div className="flex-1 flex justify-between sm:hidden">
-                  <button className="px-3 py-1 bg-[#362222] text-white rounded-md text-sm hover:bg-[#423F3E] disabled:opacity-50" disabled>
-                    Previous
-                  </button>
-                  <button className="px-3 py-1 bg-[#362222] text-white rounded-md text-sm hover:bg-[#423F3E] disabled:opacity-50" disabled>
-                    Next
-                  </button>
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-400">
+                    Showing <span className="font-medium">{students.length}</span> students
+                  </p>
                 </div>
-                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm text-gray-400">
-                      Showing <span className="font-medium">{students.length}</span> students
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-400">
-                      Page 1
-                    </span>
-                  </div>
+                <div>
+                  <span className="text-sm text-gray-400">
+                    Page 1
+                  </span>
                 </div>
               </div>
             </div>
-          )}
-          
-          {/* Comprehensive Student Table */}
-          {viewMode === 'table' && (
-            <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] overflow-hidden">
-              {loadingComprehensiveData ? (
-                <div className="flex flex-col justify-center items-center py-12">
-                  <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-white mb-4"></div>
-                  <p className="text-gray-300">Loading initial data...</p>
-                  <p className="text-gray-400 text-sm mt-2">The rest of the data will load in the background</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto max-w-full" style={{ WebkitOverflowScrolling: 'touch' }}>
-                  <div className="min-w-max">
-                    <table className="w-full divide-y divide-[#423F3E]">
-                      <thead className="bg-[#362222]">
-                        <tr>
-                          <th scope="col" className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider sticky left-0 top-0 z-20 bg-[#362222] min-w-[100px]">
-                            ADM. NO
-                          </th>
-                          <th scope="col" className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider sticky left-[100px] top-0 z-20 bg-[#362222] min-w-[150px]">
-                            NAME
-                          </th>
-                          <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider sticky top-0 z-10 bg-[#362222] min-w-[50px]">
-                            YEAR
-                          </th>
-                          <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider sticky top-0 z-10 bg-[#362222] min-w-[80px]">
-                            GROUP
-                          </th>
-                          <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider sticky top-0 z-10 bg-[#362222] min-w-[80px]">
-                            MEDIUM
-                          </th>
-                          
-                          {/* Month columns */}
-                          {months.map((month) => (
-                            <th 
-                              key={month} 
-                              scope="col" 
-                              className="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider sticky top-0 z-10 bg-[#423F3E] min-w-[90px]"
-                              colSpan={3}
-                            >
-                              {capitalize(month.substring(0, 3))}
-                            </th>
-                          ))}
-                          
-                          {/* Annual summary column */}
-                          <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider sticky top-0 right-0 z-10 bg-[#262626] min-w-[100px]">
-                            ANNUAL
-                          </th>
-                        </tr>
-                        
-                        {/* Sub-header for attendance columns */}
-                        <tr className="bg-[#362222]">
-                          <th scope="col" className="px-2 py-2 text-left text-[10px] font-medium text-gray-400 sticky left-0 z-20 bg-[#362222]">
-                            ID
-                          </th>
-                          <th scope="col" className="px-2 py-2 text-left text-[10px] font-medium text-gray-400 sticky left-[100px] z-20 bg-[#362222]">
-                            STUDENT
-                          </th>
-                          <th scope="col" className="px-2 py-2 text-center text-[10px] font-medium text-gray-400 sticky top-[41px] z-10 bg-[#362222]">
-                            YR
-                          </th>
-                          <th scope="col" className="px-2 py-2 text-center text-[10px] font-medium text-gray-400 sticky top-[41px] z-10 bg-[#362222]">
-                            GRP
-                          </th>
-                          <th scope="col" className="px-2 py-2 text-center text-[10px] font-medium text-gray-400 sticky top-[41px] z-10 bg-[#362222]">
-                            MED
-                          </th>
-                          
-                          {/* Month sub-columns */}
-                          {months.map((month) => (
-                            <React.Fragment key={`${month}-sub`}>
-                              <th scope="col" className="px-1 py-2 text-center text-[10px] font-medium text-gray-400 sticky top-[41px] z-10 bg-[#423F3E]">
-                                P
-                              </th>
-                              <th scope="col" className="px-1 py-2 text-center text-[10px] font-medium text-gray-400 sticky top-[41px] z-10 bg-[#423F3E]">
-                                W
-                              </th>
-                              <th scope="col" className="px-1 py-2 text-center text-[10px] font-medium text-gray-400 sticky top-[41px] z-10 bg-[#423F3E]">
-                                %
-                              </th>
-                            </React.Fragment>
-                          ))}
-                          
-                          {/* Annual column */}
-                          <th scope="col" className="px-2 py-2 text-center text-[10px] font-medium text-white sticky top-[41px] right-0 z-10 bg-[#262626]">
-                            PERCENT
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-[#2B2B2B] divide-y divide-[#423F3E]">
-                        {filteredStudentsWithAttendance.length === 0 ? (
-                          <tr>
-                            <td colSpan={5 + (months.length * 3) + 1} className="px-3 py-4 text-center text-gray-300">
-                              No students found. Add a new student or adjust your filters.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredStudentsWithAttendance.map((student) => (
-                            <tr key={student.id} className="hover:bg-[#362222] text-xs">
-                              <td className="px-2 py-3 whitespace-nowrap text-gray-200 sticky left-0 bg-[#2B2B2B] z-10 min-w-[100px] hover:bg-[#362222]">
-                                {student.admission_number}
-                              </td>
-                              <td className="px-2 py-3 whitespace-nowrap text-gray-200 font-medium sticky left-[100px] bg-[#2B2B2B] z-10 min-w-[150px] hover:bg-[#362222]">
-                                {student.name}
-                              </td>
-                              <td className="px-2 py-3 whitespace-nowrap text-center text-gray-200">
-                                {student.year}
-                              </td>
-                              <td className="px-2 py-3 whitespace-nowrap text-center text-gray-200 capitalize">
-                                {student.group}
-                              </td>
-                              <td className="px-2 py-3 whitespace-nowrap text-center text-gray-200 capitalize">
-                                {student.medium}
-                              </td>
-                              
-                              {/* Month attendance data */}
-                              {months.map((month) => {
-                                const monthData = student.monthlyAttendance?.[month] || {
-                                  days_present: 0,
-                                  working_days: 0,
-                                  attendance_percentage: 0
-                                };
-                                
-                                return (
-                                  <React.Fragment key={`${student.id}-${month}`}>
-                                    <td className="px-1 py-3 whitespace-nowrap text-center text-gray-200 bg-[#242424]">
-                                      {monthData.days_present}
-                                    </td>
-                                    <td className="px-1 py-3 whitespace-nowrap text-center text-gray-200 bg-[#242424]">
-                                      {monthData.working_days}
-                                    </td>
-                                    <td className="px-1 py-3 whitespace-nowrap text-center bg-[#242424]">
-                                      {monthData.working_days > 0 ? (
-                                        <span className={`px-1 py-0.5 text-[10px] rounded-full ${
-                                          monthData.attendance_percentage >= 75 ? 'bg-green-900 text-green-300' : 
-                                          monthData.attendance_percentage >= 50 ? 'bg-yellow-900 text-yellow-300' : 
-                                          monthData.attendance_percentage > 0 ? 'bg-red-900 text-red-300' : 
-                                          'bg-gray-700 text-gray-400'
-                                        }`}>
-                                          {monthData.attendance_percentage.toFixed(1)}%
-                                        </span>
-                                      ) : (
-                                        <span className="text-gray-500">-</span>
-                                      )}
-                                    </td>
-                                  </React.Fragment>
-                                );
-                              })}
-                              
-                              {/* Annual attendance percentage */}
-                              <td className="px-2 py-3 whitespace-nowrap text-center font-medium bg-[#262626] sticky right-0 z-10">
-                                {student.attendance?.working_days > 0 ? (
-                                  <span className={`px-2 py-1 text-xs rounded-full ${
-                                    student.attendance.attendance_percentage >= 75 ? 'bg-green-900 text-green-300' : 
-                                    student.attendance.attendance_percentage >= 50 ? 'bg-yellow-900 text-yellow-300' : 
-                                    'bg-red-900 text-red-300'
-                                  }`}>
-                                    {student.attendance.attendance_percentage.toFixed(1)}%
-                                  </span>
-                                ) : (
-                                  <span className="text-gray-500">No Data</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          </div>
         </div>
       </main>
       
