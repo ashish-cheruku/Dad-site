@@ -3,6 +3,8 @@ import { attendanceService } from '../services/api';
 import { authService } from '../services/api';
 import Navbar from '../components/Navbar';
 import { Button } from '../components/ui/button';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 const AttendanceManagement = () => {
   const [loading, setLoading] = useState(true);
@@ -12,8 +14,14 @@ const AttendanceManagement = () => {
   // Filters for class selection
   const [selectedYear, setSelectedYear] = useState('1');
   const [selectedGroup, setSelectedGroup] = useState('mpc');
+  const [selectedMedium, setSelectedMedium] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('january');
   const [academicYear, setAcademicYear] = useState('2024-2025');
+  
+  // Multi-month selection for export
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [selectedMonths, setSelectedMonths] = useState([]);
+  const [exportLoading, setExportLoading] = useState(false);
   
   // Working days state (for principal)
   const [workingDays, setWorkingDays] = useState(0);
@@ -68,7 +76,8 @@ const AttendanceManagement = () => {
         parseInt(selectedYear),
         selectedGroup,
         academicYear,
-        selectedMonth
+        selectedMonth,
+        selectedMedium || null
       );
       
       console.log('Class attendance data:', data);
@@ -84,7 +93,7 @@ const AttendanceManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedYear, selectedGroup, academicYear, selectedMonth]);
+  }, [selectedYear, selectedGroup, selectedMedium, academicYear, selectedMonth]);
   
   const fetchLowAttendanceStudents = useCallback(async () => {
     try {
@@ -93,13 +102,15 @@ const AttendanceManagement = () => {
       
       const year = selectedYear ? parseInt(selectedYear) : null;
       const group = selectedGroup || null;
+      const medium = selectedMedium || null;
       
       const data = await attendanceService.getStudentsWithLowAttendance(
         academicYear,
         selectedMonth,
         percentageThreshold,
         year,
-        group
+        group,
+        medium
       );
       
       setLowAttendanceStudents(data.students);
@@ -109,20 +120,20 @@ const AttendanceManagement = () => {
     } finally {
       setLoadingLowAttendance(false);
     }
-  }, [academicYear, selectedMonth, percentageThreshold, selectedYear, selectedGroup]);
+  }, [academicYear, selectedMonth, percentageThreshold, selectedYear, selectedGroup, selectedMedium]);
   
   useEffect(() => {
     if (selectedYear && selectedGroup && selectedMonth && academicYear) {
       fetchClassAttendance();
     }
-  }, [selectedYear, selectedGroup, selectedMonth, academicYear, fetchClassAttendance]);
+  }, [selectedYear, selectedGroup, selectedMedium, selectedMonth, academicYear, fetchClassAttendance]);
   
   // Fetch low attendance data when tab changes to low attendance or when filters change
   useEffect(() => {
     if (activeTab === 'lowAttendance' && percentageThreshold > 0) {
       fetchLowAttendanceStudents();
     }
-  }, [activeTab, academicYear, selectedMonth, percentageThreshold, selectedYear, selectedGroup, fetchLowAttendanceStudents]);
+  }, [activeTab, academicYear, selectedMonth, percentageThreshold, selectedYear, selectedGroup, selectedMedium, fetchLowAttendanceStudents]);
   
   // Initialize temporary attendance values when class attendance is fetched
   useEffect(() => {
@@ -261,6 +272,198 @@ const AttendanceManagement = () => {
     return month.charAt(0).toUpperCase() + month.slice(1);
   };
   
+  // Add handler for toggling month selection
+  const handleMonthToggle = (month) => {
+    setSelectedMonths(prev => {
+      if (prev.includes(month)) {
+        return prev.filter(m => m !== month);
+      } else {
+        return [...prev, month];
+      }
+    });
+  };
+  
+  // Handler to select all months
+  const handleSelectAllMonths = () => {
+    const months = [
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december'
+    ];
+    setSelectedMonths(months);
+  };
+  
+  // Handler to clear selection
+  const handleClearMonthSelection = () => {
+    setSelectedMonths([]);
+  };
+  
+  // Export attendance data for selected months
+  const exportAttendanceData = async () => {
+    if (selectedMonths.length === 0) {
+      setError('Please select at least one month to export');
+      return;
+    }
+    
+    try {
+      setExportLoading(true);
+      setError('');
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Process each selected month
+      for (const month of selectedMonths) {
+        try {
+          // Fetch data for this month
+          const data = await attendanceService.getClassAttendance(
+            parseInt(selectedYear),
+            selectedGroup,
+            academicYear,
+            month,
+            selectedMedium || null
+          );
+          
+          // Skip if no data
+          if (!data || !data.students || data.students.length === 0) {
+            continue;
+          }
+          
+          // Create headers
+          const headers = [
+            'Admission Number',
+            'Student Name',
+            'Days Present',
+            'Working Days',
+            'Attendance Percentage'
+          ];
+          
+          // Create data rows
+          const rows = data.students.map(student => [
+            student.admission_number,
+            student.student_name,
+            student.days_present,
+            data.working_days,
+            `${student.attendance_percentage.toFixed(1)}%`
+          ]);
+          
+          // Add headers as first row
+          const sheetData = [headers, ...rows];
+          
+          // Create worksheet
+          const ws = XLSX.utils.aoa_to_sheet(sheetData);
+          
+          // Set column widths
+          ws['!cols'] = [
+            { wch: 15 }, // Admission Number
+            { wch: 25 }, // Student Name
+            { wch: 12 }, // Days Present
+            { wch: 12 }, // Working Days
+            { wch: 20 }  // Attendance Percentage
+          ];
+          
+          // Add worksheet to workbook (sheet name is capitalized month name)
+          XLSX.utils.book_append_sheet(wb, ws, formatMonthName(month));
+        } catch (err) {
+          console.error(`Error fetching data for ${month}:`, err);
+          // Continue with next month
+        }
+      }
+      
+      // Check if any data was added
+      if (wb.SheetNames.length === 0) {
+        setError('No data available for the selected months');
+        setExportLoading(false);
+        return;
+      }
+      
+      // Generate Excel file
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      
+      // Create filename with class and date info
+      const filename = `attendance_${selectedYear}_${selectedGroup}${selectedMedium ? '_' + selectedMedium : ''}_${academicYear}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      
+      // Save file
+      saveAs(blob, filename);
+      
+      // Close modal after successful export
+      setIsExportModalOpen(false);
+    } catch (err) {
+      console.error('Error exporting attendance data:', err);
+      setError('Failed to export attendance data');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+  
+  // Export low attendance data
+  const exportLowAttendanceData = async () => {
+    try {
+      setExportLoading(true);
+      setError('');
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Create headers
+      const headers = [
+        'Admission Number',
+        'Student Name',
+        'Year',
+        'Group',
+        'Days Present',
+        'Working Days',
+        'Attendance Percentage'
+      ];
+      
+      // Create data rows
+      const rows = lowAttendanceStudents.map(student => [
+        student.admission_number,
+        student.student_name,
+        student.year,
+        student.group.toUpperCase(),
+        student.days_present,
+        student.working_days,
+        `${student.attendance_percentage.toFixed(1)}%`
+      ]);
+      
+      // Add headers as first row
+      const sheetData = [headers, ...rows];
+      
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 15 }, // Admission Number
+        { wch: 25 }, // Student Name
+        { wch: 8 },  // Year
+        { wch: 10 }, // Group
+        { wch: 12 }, // Days Present
+        { wch: 12 }, // Working Days
+        { wch: 20 }  // Attendance Percentage
+      ];
+      
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, `Low Attendance Below ${percentageThreshold}%`);
+      
+      // Generate Excel file
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      
+      // Create filename with info
+      const filename = `low_attendance_below_${percentageThreshold}pct_${selectedMonth}_${academicYear}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      
+      // Save file
+      saveAs(blob, filename);
+    } catch (err) {
+      console.error('Error exporting low attendance data:', err);
+      setError('Failed to export low attendance data');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+  
   if (loading && !classAttendance && activeTab === 'attendance') {
     return (
       <div className="min-h-screen bg-[#171010]">
@@ -283,19 +486,28 @@ const AttendanceManagement = () => {
               <h1 className="text-3xl font-bold text-white">Attendance Management</h1>
               <p className="mt-2 text-gray-300">Track and manage student attendance records</p>
             </div>
-            {userRole === 'principal' && (
+            <div className="flex space-x-3">
               <Button 
-                onClick={() => {
-                  // Initialize the new working days input with the current working days value
-                  setNewWorkingDays(workingDays);
-                  setIsWorkingDaysModalOpen(true);
-                }}
+                onClick={() => setIsExportModalOpen(true)}
                 className="py-2 px-4 rounded-lg"
                 style={{ backgroundColor: '#362222', color: 'white' }}
               >
-                Set Working Days
+                Export Attendance
               </Button>
-            )}
+              {userRole === 'principal' && (
+                <Button 
+                  onClick={() => {
+                    // Initialize the new working days input with the current working days value
+                    setNewWorkingDays(workingDays);
+                    setIsWorkingDaysModalOpen(true);
+                  }}
+                  className="py-2 px-4 rounded-lg"
+                  style={{ backgroundColor: '#362222', color: 'white' }}
+                >
+                  Set Working Days
+                </Button>
+              )}
+            </div>
           </div>
           
           {error && (
@@ -335,6 +547,19 @@ const AttendanceManagement = () => {
                   <option value="thm">T&HM</option>
                   <option value="oas">OAS</option>
                   <option value="mphw">MPHW</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-gray-300 text-sm mb-1">Medium</label>
+                <select 
+                  value={selectedMedium}
+                  onChange={(e) => setSelectedMedium(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white"
+                >
+                  <option value="">All Mediums</option>
+                  <option value="english">English</option>
+                  <option value="telugu">Telugu</option>
                 </select>
               </div>
               
@@ -509,7 +734,7 @@ const AttendanceManagement = () => {
                       className="w-full px-3 py-2 bg-[#171010] border border-[#423F3E] rounded-md text-white"
                     />
                   </div>
-                  <div className="w-full md:w-auto mt-4 md:mt-6">
+                  <div className="w-full md:w-auto mt-4 md:mt-6 flex gap-2">
                     <Button
                       onClick={fetchLowAttendanceStudents}
                       className="w-full md:w-auto py-2 px-4 rounded-lg"
@@ -517,6 +742,23 @@ const AttendanceManagement = () => {
                     >
                       Apply Filter
                     </Button>
+                    {lowAttendanceStudents.length > 0 && (
+                      <Button
+                        onClick={exportLowAttendanceData}
+                        className="w-full md:w-auto py-2 px-4 rounded-lg flex items-center"
+                        style={{ backgroundColor: '#362222', color: 'white' }}
+                        disabled={exportLoading}
+                      >
+                        {exportLoading ? (
+                          <>
+                            <div className="animate-spin h-4 w-4 mr-2 border-2 border-t-transparent border-white rounded-full"></div>
+                            Exporting...
+                          </>
+                        ) : (
+                          <>Export</>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -639,6 +881,90 @@ const AttendanceManagement = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      
+      {/* Export Attendance Modal */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#2B2B2B] rounded-lg shadow-xl border border-[#423F3E] p-6 max-w-2xl w-full">
+            <h2 className="text-xl font-bold text-white mb-4">Export Attendance Data</h2>
+            <p className="text-gray-300 mb-6">
+              Select the months to include in the export for {selectedYear}st Year, {selectedGroup.toUpperCase()}
+              {selectedMedium && ` (${selectedMedium.charAt(0).toUpperCase() + selectedMedium.slice(1)} Medium)`} ({academicYear})
+            </p>
+            
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-white font-semibold">Months</h3>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllMonths}
+                    className="px-3 py-1 text-sm bg-[#362222] text-white rounded-md hover:bg-[#423F3E]"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearMonthSelection}
+                    className="px-3 py-1 text-sm bg-[#171010] text-white rounded-md hover:bg-[#2B2B2B]"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {['january', 'february', 'march', 'april', 'may', 'june', 
+                  'july', 'august', 'september', 'october', 'november', 'december'].map((month) => (
+                  <div key={month} 
+                    className={`p-3 rounded-lg cursor-pointer border ${
+                      selectedMonths.includes(month) 
+                        ? 'bg-[#362222] text-white border-[#423F3E]' 
+                        : 'bg-[#171010] text-gray-300 border-[#2B2B2B] hover:bg-[#202020]'
+                    }`}
+                    onClick={() => handleMonthToggle(month)}
+                  >
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedMonths.includes(month)}
+                        onChange={() => {}} // Handled by div onClick
+                        className="h-4 w-4 rounded border-gray-600 bg-[#171010] checked:bg-[#362222]"
+                      />
+                      <span className="ml-2">{formatMonthName(month)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(false)}
+                className="px-4 py-2 bg-[#171010] text-white rounded-md hover:bg-[#362222]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={exportAttendanceData}
+                className="px-4 py-2 bg-[#362222] text-white rounded-md hover:bg-[#423F3E] flex items-center"
+                disabled={exportLoading || selectedMonths.length === 0}
+              >
+                {exportLoading ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 mr-2 border-2 border-t-transparent border-white rounded-full"></div>
+                    Exporting...
+                  </>
+                ) : (
+                  <>Export</>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

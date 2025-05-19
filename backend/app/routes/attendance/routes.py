@@ -352,6 +352,7 @@ async def get_students_with_low_attendance(
     percentage_threshold: float = Query(..., description="Maximum attendance percentage threshold"),
     year: Optional[int] = None,
     group: Optional[str] = None,
+    medium: Optional[str] = None,
     current_user = Depends(get_current_active_staff)
 ):
     """Get students with attendance percentage below the specified threshold"""
@@ -362,6 +363,8 @@ async def get_students_with_low_attendance(
             students_query["year"] = year
         if group is not None:
             students_query["group"] = group
+        if medium is not None:
+            students_query["medium"] = medium
             
         # Get the students that match the basic filters
         students = list(students_collection.find(students_query))
@@ -443,12 +446,19 @@ async def get_class_attendance(
     group: str,
     academic_year: str,
     month: Month,
+    medium: Optional[str] = Query(None, description="Filter by medium (english/telugu)"),
     current_user = Depends(get_current_active_staff)
 ):
     """Get attendance for all students in a class - Staff and Principal"""
     try:
         # Get all students in this class
-        students = list(students_collection.find({"year": year, "group": group}))
+        query = {"year": year, "group": group}
+        
+        # Add medium filter if provided
+        if medium:
+            query["medium"] = medium
+            
+        students = list(students_collection.find(query))
         
         # Get global working days for this month
         working_days_record = attendance_collection.find_one({

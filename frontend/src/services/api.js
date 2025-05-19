@@ -429,9 +429,16 @@ export const attendanceService = {
   },
   
   // Get attendance for all students in a class
-  getClassAttendance: async (year, group, academicYear, month) => {
+  getClassAttendance: async (year, group, academicYear, month, medium = null) => {
     try {
-      const response = await api.get(`/attendance/class/${year}/${group}/${academicYear}/${month}`);
+      let url = `/attendance/class/${year}/${group}/${academicYear}/${month}`;
+      
+      // Add medium as a query parameter if provided
+      if (medium !== null) {
+        url += `?medium=${medium}`;
+      }
+      
+      const response = await api.get(url);
       return response.data;
     } catch (error) {
       throw error.response ? error.response.data : { detail: 'Network error' };
@@ -439,7 +446,7 @@ export const attendanceService = {
   },
   
   // Get students with attendance below threshold
-  getStudentsWithLowAttendance: async (academicYear, month, percentageThreshold, year = null, group = null) => {
+  getStudentsWithLowAttendance: async (academicYear, month, percentageThreshold, year = null, group = null, medium = null) => {
     try {
       let url = `/attendance/low-attendance/${academicYear}/${month}?percentage_threshold=${percentageThreshold}`;
       
@@ -449,6 +456,10 @@ export const attendanceService = {
       
       if (group !== null) {
         url += `&group=${group}`;
+      }
+      
+      if (medium !== null) {
+        url += `&medium=${medium}`;
       }
       
       const response = await api.get(url);
