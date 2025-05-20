@@ -84,21 +84,67 @@ export const authService = {
       });
       return response.data;
     } catch (error) {
-      throw error.response ? error.response.data : { detail: 'Network error' };
+      // Enhanced error handling for FastAPI validation errors
+      if (error.response) {
+        // If the error has a 422 status code (Unprocessable Entity), it's likely a validation error
+        if (error.response.status === 422 && error.response.data && error.response.data.detail) {
+          // The FastAPI validation errors are typically in the detail field
+          return Promise.reject(error.response.data.detail);
+        }
+        
+        // For missing request body fields (FastAPI returns an array of errors in response.data)
+        if (error.response.status === 422 && Array.isArray(error.response.data)) {
+          return Promise.reject(error.response.data);
+        }
+        
+        return Promise.reject(error.response.data);
+      }
+      
+      return Promise.reject({ detail: 'Network error or server unavailable' });
     }
   },
 
   // Login user
   login: async (username, password) => {
     try {
+      // Create form data
       const formData = new FormData();
       formData.append('username', username);
       formData.append('password', password);
       
-      const response = await api.post('/token', formData);
+      // Create a custom config to override the default content-type
+      // FastAPI OAuth2 token endpoint expects application/x-www-form-urlencoded
+      const config = {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      };
+      
+      // Convert FormData to URLSearchParams for proper encoding
+      const params = new URLSearchParams();
+      params.append('username', username);
+      params.append('password', password);
+      
+      const response = await api.post('/token', params, config);
       return response.data;
     } catch (error) {
-      throw error.response ? error.response.data : { detail: 'Network error' };
+      // Enhanced error handling for FastAPI validation errors
+      if (error.response) {
+        // If the error has a 422 status code (Unprocessable Entity), it's likely a validation error
+        if (error.response.status === 422 && error.response.data && error.response.data.detail) {
+          // The FastAPI validation errors are typically in the detail field
+          return Promise.reject(error.response.data.detail);
+        }
+        
+        // For missing request body fields (FastAPI returns an array of errors in response.data)
+        if (error.response.status === 422 && Array.isArray(error.response.data)) {
+          return Promise.reject(error.response.data);
+        }
+        
+        return Promise.reject(error.response.data);
+      }
+      
+      return Promise.reject({ detail: 'Network error or server unavailable' });
     }
   },
 

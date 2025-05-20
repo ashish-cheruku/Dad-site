@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { announcementService } from '../services/api';
 import { authService } from '../services/api';
+import { ErrorDisplay, setSafeError } from '../utils/errorHandler';
 
 const Home = () => {
   const [announcements, setAnnouncements] = useState([]);
@@ -19,7 +20,7 @@ const Home = () => {
         setAnnouncements(data);
       } catch (err) {
         console.error('Error fetching announcements:', err);
-        setError('Failed to load announcements');
+        setSafeError(setError, err, 'Failed to load announcements');
       } finally {
         setLoading(false);
       }
@@ -230,9 +231,7 @@ const Home = () => {
                         <p className="text-gray-300 mt-2">Loading announcements...</p>
                       </div>
                     ) : error ? (
-                      <div className="text-center py-4">
-                        <p className="text-red-400">{error}</p>
-                      </div>
+                      <ErrorDisplay error={error} className="alert alert-danger" />
                     ) : announcements.length === 0 ? (
                       <div className="text-center py-4">
                         <p className="text-gray-300">No announcements available</p>

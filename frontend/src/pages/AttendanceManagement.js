@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import { Button } from '../components/ui/button';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { ErrorDisplay, setSafeError } from '../utils/errorHandler';
 
 const AttendanceManagement = () => {
   const [loading, setLoading] = useState(true);
@@ -89,7 +90,7 @@ const AttendanceManagement = () => {
       }
     } catch (err) {
       console.error('Error fetching attendance data:', err);
-      setError('Failed to fetch attendance data');
+      setSafeError(setError, err, 'Failed to fetch attendance data');
     } finally {
       setLoading(false);
     }
@@ -116,7 +117,7 @@ const AttendanceManagement = () => {
       setLowAttendanceStudents(data.students);
     } catch (err) {
       console.error('Error fetching low attendance data:', err);
-      setError('Failed to fetch students with low attendance');
+      setSafeError(setError, err, 'Failed to fetch students with low attendance');
     } finally {
       setLoadingLowAttendance(false);
     }
@@ -220,7 +221,7 @@ const AttendanceManagement = () => {
       }
     } catch (err) {
       console.error('Error updating attendance:', err);
-      setError(`Failed to update attendance: ${err.detail || 'Unknown error occurred'}`);
+      setSafeError(setError, err, 'Failed to update attendance');
     } finally {
       setSavingStudents(prev => ({ ...prev, [studentId]: false }));
     }
@@ -261,7 +262,7 @@ const AttendanceManagement = () => {
       await fetchClassAttendance();
     } catch (err) {
       console.error('Error setting working days:', err);
-      setError(`Failed to set working days: ${err.detail || 'Unknown error occurred'}`);
+      setSafeError(setError, err, 'Failed to set working days');
     } finally {
       setLoading(false);
     }
@@ -390,7 +391,7 @@ const AttendanceManagement = () => {
       setIsExportModalOpen(false);
     } catch (err) {
       console.error('Error exporting attendance data:', err);
-      setError('Failed to export attendance data');
+      setSafeError(setError, err, 'Failed to export attendance data');
     } finally {
       setExportLoading(false);
     }
@@ -458,7 +459,7 @@ const AttendanceManagement = () => {
       saveAs(blob, filename);
     } catch (err) {
       console.error('Error exporting low attendance data:', err);
-      setError('Failed to export low attendance data');
+      setSafeError(setError, err, 'Failed to export low attendance data');
     } finally {
       setExportLoading(false);
     }
@@ -510,11 +511,7 @@ const AttendanceManagement = () => {
             </div>
           </div>
           
-          {error && (
-            <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 rounded-lg mb-6">
-              {error}
-            </div>
-          )}
+          <ErrorDisplay error={error} />
           
           {/* Class Selection */}
           <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] p-4 mb-6">

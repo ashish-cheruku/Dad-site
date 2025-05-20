@@ -4,6 +4,7 @@ import { authService } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { ErrorDisplay, setSafeError } from '../utils/errorHandler';
 
 const Register = () => {
   const [username, setUsername] = useState('');
@@ -12,6 +13,7 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -19,41 +21,44 @@ const Register = () => {
     
     // Form validation
     if (!username || !email || !password || !confirmPassword) {
-      setError('Please fill in all fields');
+      setSafeError(setError, 'Please fill in all fields');
       return;
     }
     
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setSafeError(setError, 'Passwords do not match');
       return;
     }
     
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address');
+      setSafeError(setError, 'Please enter a valid email address');
       return;
     }
 
     try {
       setLoading(true);
-      setError('');
+      setSafeError(setError, '');
       
       // Call register API
       await authService.register(username, email, password);
       
-      // Auto login after successful registration
-      setTimeout(async () => {
-        try {
-          await authService.login(username, password);
-          navigate('/dashboard');
-        } catch (loginErr) {
-          console.error('Auto-login failed:', loginErr);
-          navigate('/login');
-        }
-      }, 1500);
+      // Show success message
+      setSuccess('Registration successful! You can now log in.');
+      
+      // Reset form
+      setUsername('');
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+      
+      // Redirect to login after a delay
+      setTimeout(() => {
+        navigate('/login');
+      }, 3000);
     } catch (err) {
       // Handle registration error
-      setError(err.detail || 'Registration failed. Please try again.');
+      setSafeError(setError, err, 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -114,11 +119,7 @@ const Register = () => {
             </p>
           </div>
           
-          {error && (
-            <div className="mb-4 p-2 text-xs rounded-lg" style={{ backgroundColor: 'rgba(236, 100, 75, 0.1)', borderColor: 'rgba(236, 100, 75, 0.3)', color: 'rgba(236, 100, 75, 0.9)', border: '1px solid' }}>
-              {error}
-            </div>
-          )}
+          <ErrorDisplay error={error} />
           
           <form className="space-y-3" onSubmit={handleSubmit}>
             <div className="space-y-1">

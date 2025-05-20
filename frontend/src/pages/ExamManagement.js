@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import { Button } from '../components/ui/button';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { ErrorDisplay, setSafeError } from '../utils/errorHandler';
 
 const ExamManagement = () => {
   const [students, setStudents] = useState([]);
@@ -198,7 +199,7 @@ const ExamManagement = () => {
       setSuccess('Exam record created successfully');
       setFormVisible(false);
     } catch (err) {
-      setError(err.detail || 'Failed to create exam record');
+      setSafeError(setError, err, 'Failed to create exam record');
       console.error(err);
     } finally {
       setLoading(false);
@@ -220,7 +221,7 @@ const ExamManagement = () => {
       
       setSuccess('Exam record deleted successfully');
     } catch (err) {
-      setError(err.detail || 'Failed to delete exam record');
+      setSafeError(setError, err, 'Failed to delete exam record');
       console.error(err);
     } finally {
       setLoading(false);
@@ -443,11 +444,7 @@ const ExamManagement = () => {
             </div>
           </div>
 
-          {error && (
-            <div className="bg-red-900/50 border border-red-600 text-red-200 px-4 py-3 rounded mb-4">
-              {error}
-            </div>
-          )}
+          <ErrorDisplay error={error} />
           
           {success && (
             <div className="bg-green-900/50 border border-green-600 text-green-200 px-4 py-3 rounded mb-4">

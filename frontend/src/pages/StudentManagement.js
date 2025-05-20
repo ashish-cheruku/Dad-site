@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { ErrorDisplay, setSafeError } from '../utils/errorHandler';
 
 const StudentManagement = () => {
   const [students, setStudents] = useState([]);
@@ -137,8 +138,7 @@ const StudentManagement = () => {
       
       setStudents(filteredData);
     } catch (err) {
-      setError('Failed to fetch students');
-      console.error(err);
+      handleError(err, 'Failed to fetch students');
     } finally {
       setLoading(false);
     }
@@ -159,8 +159,7 @@ const StudentManagement = () => {
       
       setShowStudentInfo(true);
     } catch (err) {
-      setError('Failed to fetch student details');
-      console.error(err);
+      handleError(err, 'Failed to fetch student details');
     } finally {
       setLoading(false);
     }
@@ -178,6 +177,7 @@ const StudentManagement = () => {
       setStudentAttendance(attendanceData);
     } catch (err) {
       console.error('Error fetching attendance data:', err);
+      // Not showing this error to the user to avoid cluttering the UI
     } finally {
       setLoadingAttendance(false);
     }
@@ -222,7 +222,7 @@ const StudentManagement = () => {
     } catch (err) {
       console.error('Error fetching exam data:', err);
       setStudentExams({exams: []});
-      setError('Failed to fetch exam records');
+      handleError(err, 'Failed to fetch exam records');
     } finally {
       setLoadingExams(false);
     }
@@ -288,8 +288,7 @@ const StudentManagement = () => {
       setSelectedStudents([]);
       fetchStudents();
     } catch (err) {
-      setError('Failed to delete selected students');
-      console.error(err);
+      handleError(err, 'Failed to delete selected students');
     } finally {
       setLoading(false);
     }
@@ -332,17 +331,17 @@ const StudentManagement = () => {
       fetchStudents();
     } catch (err) {
       console.error(err);
+      // Special handling for specific validation errors
       if (err.detail) {
-        // Check for specific validation errors
         if (err.detail.includes('admission number already exists')) {
           setError('A student with this admission number already exists. Please use a unique admission number.');
         } else if (err.detail.includes('Aadhar number already exists')) {
           setError('A student with this Aadhar number already exists. Please check and correct the Aadhar number.');
         } else {
-          setError(err.detail || 'Failed to create student');
+          handleError(err, 'Failed to create student');
         }
       } else {
-        setError('Failed to create student');
+        handleError(err, 'Failed to create student');
       }
     } finally {
       setLoading(false);
@@ -365,17 +364,17 @@ const StudentManagement = () => {
       }
     } catch (err) {
       console.error(err);
+      // Special handling for specific validation errors
       if (err.detail) {
-        // Check for specific validation errors
         if (err.detail.includes('admission number already exists')) {
           setError('A student with this admission number already exists. Please use a unique admission number.');
         } else if (err.detail.includes('Aadhar number already exists')) {
           setError('A student with this Aadhar number already exists. Please check and correct the Aadhar number.');
         } else {
-          setError(err.detail || 'Failed to update student');
+          handleError(err, 'Failed to update student');
         }
       } else {
-        setError('Failed to update student');
+        handleError(err, 'Failed to update student');
       }
     } finally {
       setLoading(false);
@@ -397,8 +396,7 @@ const StudentManagement = () => {
       
       fetchStudents();
     } catch (err) {
-      setError('Failed to delete student');
-      console.error(err);
+      handleError(err, 'Failed to delete student');
     } finally {
       setLoading(false);
     }
@@ -492,8 +490,7 @@ const StudentManagement = () => {
       // Save file
       saveAs(blob, `students_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (err) {
-      setError('Failed to export student data');
-      console.error(err);
+      handleError(err, 'Failed to export student data');
     }
   };
 
@@ -511,231 +508,220 @@ const StudentManagement = () => {
     const generatePDF = async () => {
       try {
         // Fetch attendance data for all months
-        const allMonthsAttendance = await fetchAllMonthsAttendance(studentDetails.id);
+        let allMonthsAttendance = {};
+        try {
+          allMonthsAttendance = await fetchAllMonthsAttendance(studentDetails.id);
+        } catch (attendanceError) {
+          console.error('Error fetching attendance data:', attendanceError);
+          // Continue with empty attendance data rather than failing
+          allMonthsAttendance = {};
+        }
         
         // Create a new jsPDF instance
         const doc = new jsPDF();
         
-        // Add college logo and header
-        const pageWidth = doc.internal.pageSize.getWidth();
-        
-        // Add title
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Student Progress Report', pageWidth / 2, 15, { align: 'center' });
-        doc.setFont('helvetica', 'normal');
-        
-        doc.setFontSize(12);
-        doc.text('Government Junior College, Vemulawada', pageWidth / 2, 22, { align: 'center' });
-        
-        doc.setFontSize(10);
-        doc.text('Academic Year: ' + currentAcademicYear, pageWidth / 2, 28, { align: 'center' });
-        
-        // Add line
-        doc.setDrawColor(150, 150, 150);
-        doc.line(15, 32, pageWidth - 15, 32);
-        
-        // Student details section
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Student Information', 15, 40);
-        doc.setFont('helvetica', 'normal');
-        
-        const studentInfoData = [
-          ['Name', studentDetails.name],
-          ['Admission Number', studentDetails.admission_number],
-          ['Year', studentDetails.year.toString()],
-          ['Group', capitalize(studentDetails.group)],
-          ['Medium', capitalize(studentDetails.medium)],
-          ['Father\'s Name', studentDetails.father_name || 'N/A'],
-          ['Date of Birth', formatDate(studentDetails.date_of_birth) || 'N/A'],
-          ['Gender', capitalize(studentDetails.gender) || 'N/A'],
-        ];
-        
-        autoTable(doc, {
-          startY: 45,
-          head: [['Field', 'Information']],
-          body: studentInfoData,
-          theme: 'grid',
-          headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255] },
-          styles: { fontSize: 10 },
-          columnStyles: {
-            0: { cellWidth: 40 },
-            1: { cellWidth: 70 }
-          }
-        });
-        
-        // Attendance section
-        const attendanceY = doc.lastAutoTable.finalY + 15;
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Attendance Summary (All Months)', 15, attendanceY);
-        doc.setFont('helvetica', 'normal');
-        
-        // Prepare attendance data for all months
-        const attendanceTableHead = [['Month', 'Working Days', 'Days Present', 'Attendance %', 'Status']];
-        const attendanceTableBody = [];
-        
-        let totalWorkingDays = 0;
-        let totalDaysPresent = 0;
-        
-        // Add data for each month
-        months.forEach(month => {
-          const monthData = allMonthsAttendance[month] || { working_days: 0, days_present: 0, attendance_percentage: 0 };
+        try {
+          // Add college logo and header
+          const pageWidth = doc.internal.pageSize.getWidth();
           
-          if (monthData.working_days > 0) {
-            totalWorkingDays += monthData.working_days;
-            totalDaysPresent += monthData.days_present;
-            
-            const status = monthData.attendance_percentage >= 75 ? 'Good' : 
-                          monthData.attendance_percentage >= 50 ? 'Average' : 'Poor';
-            
-            attendanceTableBody.push([
-              capitalize(month),
-              monthData.working_days,
-              monthData.days_present,
-              `${monthData.attendance_percentage.toFixed(1)}%`,
-              status
-            ]);
+          // Add title
+          doc.setFontSize(18);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Student Progress Report', pageWidth / 2, 15, { align: 'center' });
+          doc.setFont('helvetica', 'normal');
+          
+          doc.setFontSize(12);
+          doc.text('Government Junior College, Vemulawada', pageWidth / 2, 22, { align: 'center' });
+          
+          doc.setFontSize(10);
+          doc.text('Academic Year: ' + currentAcademicYear, pageWidth / 2, 28, { align: 'center' });
+          
+          // Add line
+          doc.setDrawColor(150, 150, 150);
+          doc.line(15, 32, pageWidth - 15, 32);
+          
+          // Student details section
+          doc.setFontSize(14);
+          doc.setFont('helvetica', 'bold');
+          doc.text('Student Information', 15, 40);
+          doc.setFont('helvetica', 'normal');
+          
+          const studentInfoData = [
+            ['Name', studentDetails.name],
+            ['Admission Number', studentDetails.admission_number],
+            ['Year', studentDetails.year.toString()],
+            ['Group', capitalize(studentDetails.group)],
+            ['Medium', capitalize(studentDetails.medium)],
+            ['Father\'s Name', studentDetails.father_name || 'N/A'],
+            ['Date of Birth', formatDate(studentDetails.date_of_birth) || 'N/A'],
+            ['Gender', capitalize(studentDetails.gender) || 'N/A'],
+          ];
+          
+          try {
+            autoTable(doc, {
+              startY: 45,
+              head: [['Field', 'Information']],
+              body: studentInfoData,
+              theme: 'grid',
+              headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255] },
+              styles: { fontSize: 10 },
+              columnStyles: {
+                0: { cellWidth: 40 },
+                1: { cellWidth: 70 }
+              }
+            });
+          } catch (tableError) {
+            console.error('Error generating student info table:', tableError);
+            throw new Error('Failed to generate student info table: ' + tableError.message);
           }
-        });
-        
-        // Calculate overall attendance
-        const overallPercentage = totalWorkingDays > 0 
-          ? ((totalDaysPresent / totalWorkingDays) * 100).toFixed(1) 
-          : "0.0";
-        
-        // Add overall row
-        attendanceTableBody.push([
-          'Overall',
-          totalWorkingDays,
-          totalDaysPresent,
-          `${overallPercentage}%`,
-          parseFloat(overallPercentage) >= 75 ? 'Good' : 
-          parseFloat(overallPercentage) >= 50 ? 'Average' : 'Poor'
-        ]);
-        
-        autoTable(doc, {
-          startY: attendanceY + 5,
-          head: attendanceTableHead,
-          body: attendanceTableBody,
-          theme: 'grid',
-          headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255] },
-          styles: { fontSize: 10 },
-          columnStyles: {
-            0: { cellWidth: 30 },
-            4: { cellWidth: 30 }
-          }
-        });
-        
-        // Exam Records section
-        const examsY = doc.lastAutoTable.finalY + 15;
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Exam Records', 15, examsY);
-        doc.setFont('helvetica', 'normal');
-        
-        // Create exam table data
-        const examTableHead = [['Exam Type', 'Subjects', 'Marks', 'Max Marks', 'Percentage']];
-        const examTableBody = [];
-        
-        // Make sure we have valid exam data before attempting to process it
-        if (studentExams && studentExams.exams && Array.isArray(studentExams.exams)) {
-          studentExams.exams.forEach(exam => {
-            if (exam && exam.subjects) {
-              examTableBody.push([
-                exam.exam_type,
-                Object.keys(exam.subjects).join(", "),
-                exam.total_marks,
-                Object.keys(exam.subjects).length * 100,
-                `${exam.percentage.toFixed(1)}%`
-              ]);
-            }
-          });
-        }
-        
-        autoTable(doc, {
-          startY: examsY + 5,
-          head: examTableHead,
-          body: examTableBody,
-          theme: 'grid',
-          headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255] },
-          styles: { fontSize: 10 },
-          columnStyles: {
-            0: { cellWidth: 25 },
-            1: { cellWidth: 70 }
-          }
-        });
-        
-        // Performance Summary section
-        const performanceY = doc.lastAutoTable.finalY + 15;
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Performance Summary', 15, performanceY);
-        doc.setFont('helvetica', 'normal');
-        
-        // Calculate performance for each exam type
-        const examTypes = ['ut1', 'ut2', 'ut3', 'ut4', 'half-yearly', 'final'];
-        const performanceData = [];
-        
-        // Make sure we have valid exam data
-        if (studentExams && studentExams.exams && Array.isArray(studentExams.exams)) {
-          examTypes.forEach(type => {
-            const filteredExams = studentExams.exams.filter(exam => 
-              exam && exam.exam_type && exam.exam_type.toLowerCase() === type);
+          
+          // Attendance section
+          try {
+            const attendanceY = doc.lastAutoTable.finalY + 15;
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Attendance Summary (All Months)', 15, attendanceY);
+            doc.setFont('helvetica', 'normal');
             
-            if (filteredExams.length > 0) {
-              const avgPercentage = (
-                filteredExams.reduce((acc, exam) => acc + exam.percentage, 0) / 
-                filteredExams.length
-              ).toFixed(1);
+            // Prepare attendance data for all months
+            const attendanceTableHead = [['Month', 'Working Days', 'Days Present', 'Attendance %', 'Status']];
+            const attendanceTableBody = [];
+            
+            let totalWorkingDays = 0;
+            let totalDaysPresent = 0;
+            
+            // Add data for each month
+            months.forEach(month => {
+              const monthData = allMonthsAttendance[month] || { working_days: 0, days_present: 0, attendance_percentage: 0 };
               
-              performanceData.push([
-                type === 'ut1' ? 'Unit Test 1' :
-                type === 'ut2' ? 'Unit Test 2' :
-                type === 'ut3' ? 'Unit Test 3' :
-                type === 'ut4' ? 'Unit Test 4' :
-                type === 'half-yearly' ? 'Half Yearly' : 'Final Exam',
-                `${avgPercentage}%`,
-                filteredExams.length === 1 ? '1 exam' : `${filteredExams.length} exams`
-              ]);
-            }
-          });
-          
-          // Add overall performance
-          if (studentExams.exams.length > 0) {
-            const overallAvg = (
-              studentExams.exams.reduce((acc, exam) => acc + exam.percentage, 0) / 
-              studentExams.exams.length
-            ).toFixed(1);
+              if (monthData.working_days > 0) {
+                totalWorkingDays += monthData.working_days;
+                totalDaysPresent += monthData.days_present;
+                
+                const status = monthData.attendance_percentage >= 75 ? 'Good' : 
+                              monthData.attendance_percentage >= 50 ? 'Average' : 'Poor';
+                
+                attendanceTableBody.push([
+                  capitalize(month),
+                  monthData.working_days,
+                  monthData.days_present,
+                  `${monthData.attendance_percentage.toFixed(1)}%`,
+                  status
+                ]);
+              }
+            });
             
-            performanceData.push(['Overall Performance', `${overallAvg}%`, `${studentExams.exams.length} total records`]);
+            // Calculate overall attendance
+            const overallPercentage = totalWorkingDays > 0 
+              ? ((totalDaysPresent / totalWorkingDays) * 100).toFixed(1) 
+              : "0.0";
+            
+            // Add overall row
+            attendanceTableBody.push([
+              'Overall',
+              totalWorkingDays,
+              totalDaysPresent,
+              `${overallPercentage}%`,
+              parseFloat(overallPercentage) >= 75 ? 'Good' : 
+              parseFloat(overallPercentage) >= 50 ? 'Average' : 'Poor'
+            ]);
+            
+            autoTable(doc, {
+              startY: attendanceY + 5,
+              head: attendanceTableHead,
+              body: attendanceTableBody,
+              theme: 'grid',
+              headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255] },
+              styles: { fontSize: 10 },
+              columnStyles: {
+                0: { cellWidth: 30 },
+                4: { cellWidth: 30 }
+              }
+            });
+          } catch (attendanceTableError) {
+            console.error('Error generating attendance table:', attendanceTableError);
+            // Continue with the rest of the PDF
+          }
+          
+          // Exam Records section
+          try {
+            let examsY = 200; // Default if previous section failed
+            try {
+              examsY = doc.lastAutoTable.finalY + 15;
+            } catch (e) {
+              console.warn('Could not get last table Y position, using default');
+            }
+            
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Exam Records', 15, examsY);
+            doc.setFont('helvetica', 'normal');
+            
+            // Create exam table data
+            const examTableHead = [['Exam Type', 'Subjects', 'Marks', 'Max Marks', 'Percentage']];
+            const examTableBody = [];
+            
+            // Make sure we have valid exam data before attempting to process it
+            if (studentExams && studentExams.exams && Array.isArray(studentExams.exams)) {
+              studentExams.exams.forEach(exam => {
+                if (exam && exam.subjects) {
+                  examTableBody.push([
+                    exam.exam_type,
+                    Object.keys(exam.subjects).join(", "),
+                    exam.total_marks,
+                    Object.keys(exam.subjects).length * 100,
+                    `${exam.percentage.toFixed(1)}%`
+                  ]);
+                }
+              });
+            }
+            
+            autoTable(doc, {
+              startY: examsY + 5,
+              head: examTableHead,
+              body: examTableBody,
+              theme: 'grid',
+              headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255] },
+              styles: { fontSize: 10 },
+              columnStyles: {
+                0: { cellWidth: 25 },
+                1: { cellWidth: 70 }
+              }
+            });
+          } catch (examTableError) {
+            console.error('Error generating exam table:', examTableError);
+            // Continue with the PDF
+          }
+          
+          try {
+            // Save the PDF
+            doc.save(`progress_card_${studentDetails.admission_number}.pdf`);
+            
+            // Clear error message
+            setError('');
+          } catch (saveError) {
+            console.error('Error saving PDF:', saveError);
+            throw new Error('Failed to save PDF: ' + saveError.message);
+          }
+        } catch (pdfError) {
+          console.error('Error creating PDF content:', pdfError);
+          throw new Error('Failed to create PDF content: ' + pdfError.message);
+        }
+      } catch (err) {
+        console.error('Error in overall PDF generation:', err);
+        
+        // Ensure we're handling the error safely
+        if (typeof err === 'string') {
+          setError(err);
+        } else if (err && err.message) {
+          setError('Failed to generate progress card: ' + err.message);
+        } else {
+          try {
+            setError('Failed to generate progress card: ' + JSON.stringify(err));
+          } catch (e) {
+            setError('Failed to generate progress card due to an unknown error');
           }
         }
-        
-        autoTable(doc, {
-          startY: performanceY + 5,
-          head: [['Exam Type', 'Average Score', 'Records']],
-          body: performanceData,
-          theme: 'grid',
-          headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255] },
-          styles: { fontSize: 10 }
-        });
-        
-        // Add footer
-        const footerY = doc.lastAutoTable.finalY + 15;
-        doc.setFontSize(10);
-        doc.text('Generated on: ' + new Date().toLocaleDateString(), 15, footerY);
-        doc.text('This is an official document of Government Junior College, Vemulawada.', 15, footerY + 5);
-        
-        // Save the PDF
-        doc.save(`progress_card_${studentDetails.admission_number}.pdf`);
-        
-        // Clear error message
-        setError('');
-      } catch (err) {
-        console.error('Error generating PDF:', err);
-        setError('Failed to generate progress card: ' + (err.message || 'Unknown error'));
       }
     };
 
@@ -743,6 +729,52 @@ const StudentManagement = () => {
     generatePDF();
   };
 
+  // Error handling utility function - updated to use the imported utility
+  const handleError = (err, defaultMessage = 'An error occurred') => {
+    console.error(defaultMessage, err);
+    setSafeError(setError, err, defaultMessage);
+  };
+
+  // Render error message safely
+  const renderErrorMessage = () => {
+    if (!error) return null;
+    
+    try {
+      // If error is already a string, display it directly
+      if (typeof error === 'string') {
+        return (
+          <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 rounded-lg mb-6">
+            {error}
+          </div>
+        );
+      }
+      
+      // If error is an object with keys {type, loc, msg, input, url}, format it
+      if (error && error.type && error.msg) {
+        return (
+          <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 rounded-lg mb-6">
+            Error: {error.msg || 'Unknown error'}
+          </div>
+        );
+      }
+      
+      // For any other object, stringify it
+      return (
+        <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 rounded-lg mb-6">
+          {String(error)}
+        </div>
+      );
+    } catch (e) {
+      // Last resort if rendering fails
+      return (
+        <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 rounded-lg mb-6">
+          An error occurred. Please try again.
+        </div>
+      );
+    }
+  };
+
+  // Render UI - use ErrorDisplay component instead of direct error rendering
   if (loading && students.length === 0) {
     return (
       <div className="min-h-screen bg-[#171010]">
@@ -788,11 +820,7 @@ const StudentManagement = () => {
               </div>
             </div>
             
-            {error && (
-              <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 rounded-lg mb-6">
-                {error}
-              </div>
-            )}
+            <ErrorDisplay error={error} />
             
             {/* Student Details Card */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
@@ -1374,11 +1402,7 @@ const StudentManagement = () => {
             )}
           </div>
           
-          {error && (
-            <div className="bg-red-900/30 border border-red-700 text-red-300 p-4 rounded-lg mb-6">
-              {error}
-            </div>
-          )}
+          <ErrorDisplay error={error} />
           
           {/* Filters */}
           <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] p-4 mb-6">

@@ -4,6 +4,7 @@ import { authService } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { ErrorDisplay, setSafeError } from '../utils/errorHandler';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -29,35 +30,49 @@ const Login = () => {
     }
   }, [navigate]);
 
-  const handleSubmit = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     
-    // Form validation
     if (!username || !password) {
-      setError('Please fill in all fields');
+      setError('Username and password are required');
       return;
     }
-
+    
     try {
+      setError(''); // Clear any existing errors
       setLoading(true);
-      setError('');
       
-      // Call login API
-      const response = await authService.login(username, password);
+      const data = await authService.login(username, password);
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('userRole', data.role);
       
-      // Redirect based on user role
-      const userRole = response.role || localStorage.getItem('userRole');
-      
-      if (userRole === 'principal') {
-        navigate('/principal/dashboard');
-      } else if (userRole === 'staff') {
-        navigate('/staff/dashboard');
-      } else {
+      // Redirect based on role
+      if (data.role === 'principal') {
         navigate('/dashboard');
+      } else if (data.role === 'staff') {
+        navigate('/dashboard');
+      } else {
+        navigate('/');
       }
     } catch (err) {
-      // Handle login error
-      setError(err.detail || 'Login failed. Please check your credentials.');
+      console.error('Login failed:', err);
+      
+      // Handle validation errors specifically
+      if (err && Array.isArray(err)) {
+        // Format FastAPI validation errors
+        const errorMessages = err.map(e => {
+          if (e.type === 'missing' && e.loc && e.loc.includes('username')) {
+            return 'Username is required';
+          } else if (e.type === 'missing' && e.loc && e.loc.includes('password')) {
+            return 'Password is required';
+          } else {
+            return e.msg || 'Validation error';
+          }
+        });
+        setError(errorMessages.join('. '));
+      } else {
+        setSafeError(setError, err, 'Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -132,13 +147,9 @@ const Login = () => {
             </p>
           </div>
           
-          {error && (
-            <div className="mb-6 p-4 text-sm rounded-lg" style={{ backgroundColor: 'rgba(236, 100, 75, 0.1)', borderColor: 'rgba(236, 100, 75, 0.3)', color: 'rgba(236, 100, 75, 0.9)', border: '1px solid' }}>
-              {error}
-            </div>
-          )}
+          <ErrorDisplay error={error} />
           
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleLogin}>
             <div className="space-y-2">
               <Label htmlFor="username" className="text-gray-300">
                 Username
