@@ -158,42 +158,6 @@ const Dashboard = () => {
           <>
             <div className="bg-[#2B2B2B] rounded-2xl shadow-xl border border-[#423F3E] p-8 mb-8">
               <h3 className="text-xl font-semibold mb-4 text-white">Staff Dashboard</h3>
-              <div className="mb-6">
-                <h4 className="text-lg font-medium text-white mb-3">Your Classes</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {staffData?.classes?.length > 0 ? (
-                    staffData.classes.map((className, index) => (
-                      <div key={index} className="bg-[#362222] p-4 rounded-lg">
-                        <p className="text-lg font-medium text-white">{className}</p>
-                        <div className="mt-3 flex justify-between">
-                          <button className="text-sm bg-[#423F3E] hover:bg-[#544E4E] text-white py-1 px-3 rounded">
-                            Attendance
-                          </button>
-                          <button className="text-sm bg-[#423F3E] hover:bg-[#544E4E] text-white py-1 px-3 rounded">
-                            Grades
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="col-span-3 bg-[#362222] p-4 rounded-lg">
-                      <p className="text-gray-300">No classes assigned yet.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] p-6 mb-8">
-              <h3 className="text-xl font-semibold mb-4 text-white">Teaching Resources</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button className="w-full py-3 px-4 bg-[#362222] hover:bg-[#423F3E] text-white rounded-md transition-colors duration-300 text-left">
-                  Lesson Plan Templates
-                </button>
-                <button className="w-full py-3 px-4 bg-[#362222] hover:bg-[#423F3E] text-white rounded-md transition-colors duration-300 text-left">
-                  Assessment Tools
-                </button>
-              </div>
             </div>
             
             {/* Student Management Cards */}

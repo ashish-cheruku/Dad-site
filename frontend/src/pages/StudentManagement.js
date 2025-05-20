@@ -62,7 +62,13 @@ const StudentManagement = () => {
       const group = filterGroup || null;
       const medium = filterMedium || null;
       
-      const data = await studentService.getAllStudents(year, group, medium);
+      // Create a filters object with the correct parameters
+      const filters = {};
+      if (year !== null) filters.year = year;
+      if (group !== null) filters.group = group;
+      if (medium !== null) filters.medium = medium;
+      
+      const data = await studentService.getAllStudents(filters);
       
       // Apply client-side search filtering if search term exists
       let filteredData = data;
