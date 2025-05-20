@@ -512,14 +512,11 @@ const StudentManagement = () => {
       return;
     }
 
-    // Show loading message
-    setError('Generating progress card, please wait...');
-    
-    // Async function to handle the PDF generation
+
     const generatePDF = async () => {
       setIsGeneratingPDF(true);
       setPdfGenerationProgress('Initializing...');
-      
+
       try {
         // Fetch attendance data for all months
         setPdfGenerationProgress('Fetching attendance data...');
@@ -528,211 +525,218 @@ const StudentManagement = () => {
           allMonthsAttendance = await fetchAllMonthsAttendance(studentDetails.id);
         } catch (attendanceError) {
           console.error('Error fetching attendance data:', attendanceError);
-          // Continue with empty attendance data rather than failing
           allMonthsAttendance = {};
         }
-        
+
+        // Determine the print month (current month)
+        const now = new Date();
+        const printMonthIndex = now.getMonth(); // 0-based (0=Jan, 5=June)
+        const startMonthIndex = 5; // June
+        const monthsToInclude = months.slice(startMonthIndex, printMonthIndex + 1);
+
+        // Aggregate attendance from June to print month
+        let totalWorkingDays = 0;
+        let totalDaysPresent = 0;
+        monthsToInclude.forEach(month => {
+          const monthData = allMonthsAttendance[month] || { working_days: 0, days_present: 0 };
+          totalWorkingDays += monthData.working_days || 0;
+          totalDaysPresent += monthData.days_present || 0;
+        });
+        const overallPercentage = totalWorkingDays > 0 ? ((totalDaysPresent / totalWorkingDays) * 100).toFixed(1) : "0.0";
+
+        // Prepare exam data for the table
+        const examTypes = [
+          { key: 'UT1', label: 'Unit Test 1' },
+          { key: 'UT2', label: 'Unit Test 2' },
+          { key: 'HLY', label: 'Half Yearly' },
+          { key: 'PF', label: 'Pre-Final Exam' }
+        ];
+        // Get subjects for the group from the first exam or fallback to a default
+        let groupSubjects = [];
+        let subjectFullNames = {};
+        if (studentExams && studentExams.exams && studentExams.exams.length > 0) {
+          for (const exam of studentExams.exams) {
+            if (exam.subjects && Object.keys(exam.subjects).length > 0) {
+              groupSubjects = Object.keys(exam.subjects);
+              break;
+            }
+          }
+        }
+        // Map short subject codes to full names (customize as needed)
+        const subjectNameMap = {
+          eng: 'English',
+          tel: 'Telugu',
+          mat: 'Mathematics',
+          phy: 'Physics',
+          che: 'Chemistry',
+          bot: 'Botany',
+          zoo: 'Zoology',
+          eco: 'Economics',
+          civ: 'Civics',
+          his: 'History',
+          com: 'Commerce',
+          acc: 'Accountancy',
+          san: 'Sanskrit',
+          soc: 'Social',
+          // Add more as needed
+        };
+        subjectFullNames = groupSubjects.map(s => subjectNameMap[s] || s.charAt(0).toUpperCase() + s.slice(1));
+        if (groupSubjects.length === 0) {
+          groupSubjects = ['eng', 'tel', 'mat', 'phy', 'che'];
+          subjectFullNames = groupSubjects.map(s => subjectNameMap[s] || s.charAt(0).toUpperCase() + s.slice(1));
+        }
+
+        // Build exam table rows
+        const examRows = examTypes.map(typeObj => {
+          const exam = (studentExams.exams || []).find(e => (e.exam_type || '').toUpperCase() === typeObj.key);
+          const row = [typeObj.label];
+          let total = 0;
+          groupSubjects.forEach(subj => {
+            const mark = exam && exam.subjects && exam.subjects[subj] !== undefined ? exam.subjects[subj] : '';
+            row.push(mark);
+            if (typeof mark === 'number') total += mark;
+          });
+          // Total
+          row.push(total > 0 ? total : '');
+          // Percentage
+          if (exam && typeof exam.percentage === 'number') {
+            row.push(exam.percentage.toFixed(1) + '%');
+          } else {
+            row.push('');
+          }
+          return row;
+        });
+
         // Create a new jsPDF instance
         setPdfGenerationProgress('Creating PDF document...');
         const doc = new jsPDF();
-        
-        try {
-          // Add college logo and header
-          const pageWidth = doc.internal.pageSize.getWidth();
-          
-          // Add title
-          doc.setFontSize(18);
+        const pageWidth = doc.internal.pageSize.getWidth();
+        let y = 15;
+
+        // Header
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Government Junior College, Vemulawada', pageWidth / 2, y, { align: 'center' });
+        y += 8;
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Student Performance Report', pageWidth / 2, y, { align: 'center' });
+        y += 7;
+        doc.setFontSize(11);
+        doc.text(`Academic Year: ${currentAcademicYear}`, pageWidth / 2, y, { align: 'center' });
+        y += 7;
+        doc.setDrawColor(54, 34, 34);
+        doc.line(20, y, pageWidth - 20, y);
+        y += 4;
+
+        // Student Information Section
+        y += 4;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Student Information', 20, y);
+        y += 10;
+        doc.setFont('helvetica', 'normal');
+        const infoRows = [
+          [
+            { label: 'Admission Number', value: studentDetails.admission_number || '' },
+            { label: 'Name', value: studentDetails.name || '' }
+          ],
+          [
+            { label: 'Year', value: studentDetails.year ? studentDetails.year.toString() : '' },
+            { label: "Father's Name", value: studentDetails.father_name || '' }
+          ],     
+          [
+            { label: 'Group', value: studentDetails.group ? capitalize(studentDetails.group) : '' },
+            { label: 'Student Phone Number', value: studentDetails.student_phone || '' }
+          ],
+          [ 
+            { label: 'Medium', value: studentDetails.medium ? capitalize(studentDetails.medium) : '' },
+            { label: 'Parent Phone Number', value: studentDetails.parent_phone || '' }
+          ]
+        ];
+        infoRows.forEach(row => {
           doc.setFont('helvetica', 'bold');
-          doc.text('Student Progress Report', pageWidth / 2, 15, { align: 'center' });
-          doc.setFont('helvetica', 'normal');
-          
-          doc.setFontSize(12);
-          doc.text('Government Junior College, Vemulawada', pageWidth / 2, 22, { align: 'center' });
-          
           doc.setFontSize(10);
-          doc.text('Academic Year: ' + currentAcademicYear, pageWidth / 2, 28, { align: 'center' });
-          
-          // Add line
-          doc.setDrawColor(150, 150, 150);
-          doc.line(15, 32, pageWidth - 15, 32);
-          
-          // Student details section
-          setPdfGenerationProgress('Adding student information...');
-          doc.setFontSize(14);
-          doc.setFont('helvetica', 'bold');
-          doc.text('Student Information', 15, 40);
+          doc.text(row[0].label + ':', 20, y);
           doc.setFont('helvetica', 'normal');
-          
-          // Prepare student info data - safeguard against missing properties
-          const studentInfoData = [
-            ['Name', studentDetails.name || 'N/A'],
-            ['Admission Number', studentDetails.admission_number || 'N/A'],
-            ['Year', studentDetails.year ? studentDetails.year.toString() : 'N/A'],
-            ['Group', studentDetails.group ? capitalize(studentDetails.group) : 'N/A'],
-            ['Medium', studentDetails.medium ? capitalize(studentDetails.medium) : 'N/A'],
-            ['Father\'s Name', studentDetails.father_name || 'N/A'],
-            ['Date of Birth', formatDate(studentDetails.date_of_birth) || 'N/A'],
-            ['Gender', studentDetails.gender ? capitalize(studentDetails.gender) : 'N/A'],
-          ];
-          
-          try {
-            autoTable(doc, {
-              startY: 45,
-              head: [['Field', 'Information']],
-              body: studentInfoData,
-              theme: 'grid',
-              headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255] },
-              styles: { fontSize: 10 },
-              columnStyles: {
-                0: { cellWidth: 40 },
-                1: { cellWidth: 70 }
-              }
-            });
-          } catch (tableError) {
-            console.error('Error generating student info table:', tableError);
-            throw new Error('Failed to generate student info table: ' + tableError.message);
-          }
-          
-          // Attendance section
-          setPdfGenerationProgress('Adding attendance data...');
-          try {
-            const attendanceY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 15 : 120;
-            doc.setFontSize(14);
+          doc.text(row[0].value, 55, y);
+          if (row[1].label) {
             doc.setFont('helvetica', 'bold');
-            doc.text('Attendance Summary (All Months)', 15, attendanceY);
+            doc.text(row[1].label + ':', 110, y);
             doc.setFont('helvetica', 'normal');
-            
-            // Prepare attendance data for all months
-            const attendanceTableHead = [['Month', 'Working Days', 'Days Present', 'Attendance %', 'Status']];
-            const attendanceTableBody = [];
-            
-            let totalWorkingDays = 0;
-            let totalDaysPresent = 0;
-            
-            // Add data for each month - faster processing with fewer iterations
-            months.forEach(month => {
-              const monthData = allMonthsAttendance[month] || { working_days: 0, days_present: 0, attendance_percentage: 0 };
-              
-              if (monthData.working_days > 0) {
-                totalWorkingDays += monthData.working_days;
-                totalDaysPresent += monthData.days_present;
-                
-                const percentage = monthData.attendance_percentage || 0;
-                const status = percentage >= 75 ? 'Good' : 
-                              percentage >= 50 ? 'Average' : 'Poor';
-                
-                attendanceTableBody.push([
-                  capitalize(month),
-                  monthData.working_days,
-                  monthData.days_present,
-                  `${percentage.toFixed(1)}%`,
-                  status
-                ]);
-              }
-            });
-            
-            // Calculate overall attendance
-            const overallPercentage = totalWorkingDays > 0 
-              ? ((totalDaysPresent / totalWorkingDays) * 100).toFixed(1) 
-              : "0.0";
-            
-            // Add overall row
-            attendanceTableBody.push([
-              'Overall',
-              totalWorkingDays,
-              totalDaysPresent,
-              `${overallPercentage}%`,
-              parseFloat(overallPercentage) >= 75 ? 'Good' : 
-              parseFloat(overallPercentage) >= 50 ? 'Average' : 'Poor'
-            ]);
-            
-            autoTable(doc, {
-              startY: attendanceY + 5,
-              head: attendanceTableHead,
-              body: attendanceTableBody,
-              theme: 'grid',
-              headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255] },
-              styles: { fontSize: 10 },
-              columnStyles: {
-                0: { cellWidth: 30 },
-                4: { cellWidth: 30 }
-              }
-            });
-          } catch (attendanceTableError) {
-            console.error('Error generating attendance table:', attendanceTableError);
-            // Continue with the rest of the PDF
+            doc.text(row[1].value, 155, y);
           }
-          
-          // Exam Records section
-          setPdfGenerationProgress('Adding exam records...');
-          try {
-            let examsY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 15 : 200;
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Exam Records', 15, examsY);
-            doc.setFont('helvetica', 'normal');
-            
-            // Create exam table data
-            const examTableHead = [['Exam Type', 'Subjects', 'Marks', 'Max Marks', 'Percentage']];
-            const examTableBody = [];
-            
-            // Make sure we have valid exam data before attempting to process it
-            if (studentExams && studentExams.exams && Array.isArray(studentExams.exams)) {
-              studentExams.exams.forEach(exam => {
-                if (exam && exam.subjects) {
-                  try {
-                    const subjectKeys = Object.keys(exam.subjects);
-                    examTableBody.push([
-                      exam.exam_type || 'Unknown',
-                      subjectKeys.join(", "),
-                      exam.total_marks || 0,
-                      subjectKeys.length * 100,
-                      `${(exam.percentage || 0).toFixed(1)}%`
-                    ]);
-                  } catch (err) {
-                    console.error('Error processing exam row:', err);
-                    // Skip this exam but continue with others
-                  }
-                }
-              });
-            }
-            
-            autoTable(doc, {
-              startY: examsY + 5,
-              head: examTableHead,
-              body: examTableBody,
-              theme: 'grid',
-              headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255] },
-              styles: { fontSize: 10 },
-              columnStyles: {
-                0: { cellWidth: 25 },
-                1: { cellWidth: 70 }
-              }
-            });
-          } catch (examTableError) {
-            console.error('Error generating exam table:', examTableError);
-            // Continue with the PDF
-          }
-          
-          setPdfGenerationProgress('Finalizing PDF...');
-          try {
-            // Save the PDF
-            doc.save(`progress_card_${studentDetails.admission_number}.pdf`);
-            
-            // Clear error message
-            setError('');
-          } catch (saveError) {
-            console.error('Error saving PDF:', saveError);
-            throw new Error('Failed to save PDF: ' + saveError.message);
-          }
-        } catch (pdfError) {
-          console.error('Error creating PDF content:', pdfError);
-          throw new Error('Failed to create PDF content: ' + pdfError.message);
+          y += 6;
+        });
+        y += 2;
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, y, pageWidth - 20, y);
+        y += 4;
+
+        // Exam Records Table
+        y += 4;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Exam Records', 20, y);
+        y += 4;
+        const examTableHead = [
+          ['Exam', ...subjectFullNames, 'Total', 'Percentage']
+        ];
+        autoTable(doc, {
+          startY: y,
+          head: examTableHead,
+          body: examRows,
+          theme: 'grid',
+          headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255], fontStyle: 'bold' },
+          bodyStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0] },
+          alternateRowStyles: { fillColor: [245, 245, 245] },
+          styles: { fontSize: 8, cellPadding: 2 },
+          margin: { left: 20, right: 20 },
+          tableWidth: 'auto'
+        });
+        y = doc.lastAutoTable.finalY + 6;
+        
+        // Attendance Summary
+        y += 4;
+        doc.line(20, y, pageWidth - 20, y);
+        y += 4;
+        y += 4;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Attendance Summary', 20, y);
+        y += 4;
+        const attTableHead = [['Total Working Days', 'Total Days Present', 'Attendance Percentage']];
+        const attTableBody = [[totalWorkingDays, totalDaysPresent, overallPercentage + '%']];
+        autoTable(doc, {
+          startY: y,
+          head: attTableHead,
+          body: attTableBody,
+          theme: 'grid',
+          headStyles: { fillColor: [54, 34, 34], textColor: [255, 255, 255], fontStyle: 'bold' },
+          bodyStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0] },
+          styles: { fontSize: 8, cellPadding: 2 },
+          margin: { left: 20, right: 20 },
+          tableWidth: 'auto'
+        });
+        y = doc.lastAutoTable.finalY + 15;
+
+        // Signature Section
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Parent Signature', 30, y);
+        doc.text('Class Incharge', pageWidth / 2, y, { align: 'center' });
+        doc.text('Principal', pageWidth - 30, y, { align: 'right' });
+
+        setPdfGenerationProgress('Finalizing PDF...');
+        try {
+          doc.save(`progress_card_${studentDetails.admission_number}.pdf`);
+          setError('');
+        } catch (saveError) {
+          console.error('Error saving PDF:', saveError);
+          throw new Error('Failed to save PDF: ' + saveError.message);
         }
       } catch (err) {
         console.error('Error in overall PDF generation:', err);
-        
-        // Ensure we're handling the error safely
         if (typeof err === 'string') {
           setError(err);
         } else if (err && err.message) {
@@ -749,7 +753,6 @@ const StudentManagement = () => {
       }
     };
 
-    // Start the PDF generation process
     generatePDF();
   };
 
