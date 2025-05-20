@@ -84,7 +84,7 @@ const Dashboard = () => {
           <>
             <div className="bg-[#2B2B2B] rounded-2xl shadow-xl border border-[#423F3E] p-8 mb-8">
               <h3 className="text-xl font-semibold mb-4 text-white">Principal Dashboard</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-[#362222] p-6 rounded-lg">
                   <h4 className="text-lg font-medium text-white mb-2">Total Students</h4>
                   <p className="text-3xl font-bold text-white">{principalStats?.total_students || 0}</p>
@@ -92,10 +92,6 @@ const Dashboard = () => {
                 <div className="bg-[#362222] p-6 rounded-lg">
                   <h4 className="text-lg font-medium text-white mb-2">Total Staff</h4>
                   <p className="text-3xl font-bold text-white">{principalStats?.total_staff || 0}</p>
-                </div>
-                <div className="bg-[#362222] p-6 rounded-lg">
-                  <h4 className="text-lg font-medium text-white mb-2">Departments</h4>
-                  <p className="text-3xl font-bold text-white">{principalStats?.departments || 0}</p>
                 </div>
               </div>
             </div>

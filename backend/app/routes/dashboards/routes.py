@@ -1,28 +1,23 @@
 from fastapi import APIRouter, Depends, Request
 from app.services.auth import get_current_active_principal, get_current_active_staff, get_current_user
-from app.db.mongodb import users_collection
+from app.db.mongodb import users_collection, students_collection
 from app.models.user import UserRole
 
 router = APIRouter()
 
 @router.get("/principal")
 async def principal_dashboard(current_user = Depends(get_current_active_principal)):
-    # Count users by role
-    total_students = users_collection.count_documents({"role": UserRole.STUDENT})
+    # Count staff from users collection
     total_staff = users_collection.count_documents({"role": UserRole.STAFF})
-    total_principals = users_collection.count_documents({"role": UserRole.PRINCIPAL})
     
-    # For departments, we'll use a placeholder since we don't have a departments collection yet
-    # In a real application, this would be a count from the departments collection
-    departments = 5
+    # Count students from students collection
+    total_students = students_collection.count_documents({})
     
     return {
         "message": "Principal dashboard",
         "statistics": {
             "total_students": total_students,
-            "total_staff": total_staff, 
-            "total_principals": total_principals,
-            "departments": departments
+            "total_staff": total_staff
         }
     }
 
@@ -48,17 +43,16 @@ async def unified_dashboard(request: Request, current_user = Depends(get_current
         }
     # Otherwise return principal dashboard data
     else:
-        total_students = users_collection.count_documents({"role": UserRole.STUDENT})
+        # Count staff from users collection
         total_staff = users_collection.count_documents({"role": UserRole.STAFF})
-        total_principals = users_collection.count_documents({"role": UserRole.PRINCIPAL})
-        departments = 5
+    
+        # Count students from students collection
+        total_students = students_collection.count_documents({})
         
         return {
             "message": "Principal dashboard",
             "statistics": {
                 "total_students": total_students,
-                "total_staff": total_staff, 
-                "total_principals": total_principals,
-                "departments": departments
+                "total_staff": total_staff
             }
         } 
