@@ -14,6 +14,9 @@ import AttendanceManagement from './pages/AttendanceManagement';
 import ExamManagement from './pages/ExamManagement';
 import ExamDetails from './pages/ExamDetails';
 import Announcements from './pages/Announcements';
+import PermissionsManagement from './pages/PermissionsManagement';
+import Academic from './pages/Academic';
+import Contact from './pages/Contact';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -78,6 +81,16 @@ function App() {
             </ProtectedRoute>
           } 
         />
+
+        {/* Permissions Management - Principal only */}
+        <Route 
+          path="/permissions-management" 
+          element={
+            <ProtectedRoute requiredRole="principal">
+              <PermissionsManagement />
+            </ProtectedRoute>
+          } 
+        />
         
         {/* Student Management - Principal and Staff */}
         <Route 
@@ -130,8 +143,8 @@ function App() {
         />
 
         {/* Placeholder routes for navigation menu items */}
-        <Route path="/academic" element={<Home />} />
-        <Route path="/contact" element={<Home />} />
+        <Route path="/academic" element={<Academic />} />
+        <Route path="/contact" element={<Contact />} />
         
         {/* Redirect any unknown routes to home */}
         <Route path="*" element={<Navigate to="/" />} />

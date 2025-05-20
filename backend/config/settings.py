@@ -13,6 +13,7 @@ FACULTY_COLLECTION = "faculty"
 STUDENTS_COLLECTION = "students"
 ATTENDANCE_COLLECTION = "attendance"
 EXAMS_COLLECTION = "exams"
+PERMISSIONS_COLLECTION = "permissions"
 
 # Security Configuration
 SECRET_KEY = "YOUR_SECRET_KEY_HERE"  # In production, use a secure secret key stored in environment variable

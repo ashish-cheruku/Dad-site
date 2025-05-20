@@ -91,39 +91,13 @@ export const authService = {
   // Login user
   login: async (username, password) => {
     try {
-      console.log(`Attempting login for user: ${username}`);
-      
-      // Create URLSearchParams for proper form encoding (the FastAPI way)
-      const formData = new URLSearchParams();
+      const formData = new FormData();
       formData.append('username', username);
       formData.append('password', password);
-
-      // Get the headers ready - include Authorization if token exists
-      const headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      };
       
-      // Add token to request if it exists (will trigger "already logged in" error)
-      const token = localStorage.getItem('token');
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const response = await axios.post(`${API_URL}/token`, formData.toString(), {
-        headers: headers,
-      });
-
-      console.log('Login response:', response.data);
-
-      // Store the token and role
-      if (response.data.access_token) {
-        localStorage.setItem('token', response.data.access_token);
-        localStorage.setItem('userRole', response.data.role);
-      }
-
+      const response = await api.post('/token', formData);
       return response.data;
     } catch (error) {
-      console.error('Login error:', error);
       throw error.response ? error.response.data : { detail: 'Network error' };
     }
   },
@@ -207,6 +181,15 @@ export const authService = {
     }
   },
 
+  deleteUser: async (userId) => {
+    try {
+      await api.delete(`/users/${userId}`);
+      return true;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+
   updateUserPassword: async (userId, password) => {
     try {
       const response = await api.put(`/users/${userId}/password`, { password });
@@ -216,10 +199,20 @@ export const authService = {
     }
   },
 
-  deleteUser: async (userId) => {
+  // User Permissions - Principal only
+  getUserPermissions: async (userId) => {
     try {
-      await api.delete(`/users/${userId}`);
-      return true;
+      const response = await api.get(`/users/${userId}/permissions`);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+
+  updateUserPermissions: async (userId, permissions) => {
+    try {
+      const response = await api.put(`/users/${userId}/permissions`, permissions);
+      return response.data;
     } catch (error) {
       throw error.response ? error.response.data : { detail: 'Network error' };
     }
@@ -319,9 +312,13 @@ export const examService = {
   getStudentExams: async (studentId) => {
     try {
       const response = await api.get(`/exams/student/${studentId}`);
-      return response.data;
+      console.log('Student exams API response:', response.data);
+      // Return the entire response object which has the structure:
+      // { student_id, student_name, admission_number, group, exams: [...] }
+      return response.data || { exams: [] };
     } catch (error) {
-      throw error.response ? error.response.data : { detail: 'Network error' };
+      console.error('Error fetching student exams:', error);
+      return { exams: [] };
     }
   },
   

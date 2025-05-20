@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from datetime import datetime
 from bson import ObjectId
-from app.schemas.user import UserCreate, UserResponse, UpdateUserRole, UpdateUserPassword
-from app.services.auth import get_current_active_principal, get_password_hash
-from app.db.mongodb import users_collection
+from app.schemas.user import UserCreate, UserResponse, UpdateUserRole, UpdateUserPassword, UserPermissions
+from app.services.auth import get_current_active_principal, get_password_hash, get_current_active_staff
+from app.db.mongodb import users_collection, permissions_collection
 
 router = APIRouter()
 
@@ -142,4 +142,84 @@ async def update_user_password(user_id: str, update_data: UpdateUserPassword, cu
         "email": updated_user["email"],
         "role": updated_user["role"],
         "created_at": updated_user["created_at"]
-    } 
+    }
+
+# Permissions Management
+@router.get("/{user_id}/permissions", response_model=UserPermissions)
+async def get_user_permissions(user_id: str, current_user = Depends(get_current_active_staff)):
+    """Get permissions for a specific user"""
+    try:
+        user_obj_id = ObjectId(user_id)
+    except:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user ID format"
+        )
+    
+    # Verify the user exists
+    user = users_collection.find_one({"_id": user_obj_id})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Get permissions or return default empty permissions
+    permissions = permissions_collection.find_one({"user_id": str(user_obj_id)})
+    
+    if not permissions:
+        return UserPermissions()
+    
+    return UserPermissions(
+        can_add_student=permissions.get("can_add_student", False),
+        can_edit_student=permissions.get("can_edit_student", False),
+        can_delete_student=permissions.get("can_delete_student", False)
+    )
+
+@router.put("/{user_id}/permissions", response_model=UserPermissions)
+async def update_user_permissions(
+    user_id: str, 
+    permissions: UserPermissions, 
+    current_user = Depends(get_current_active_principal)
+):
+    """Update permissions for a specific user (principal only)"""
+    try:
+        user_obj_id = ObjectId(user_id)
+    except:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user ID format"
+        )
+    
+    # Verify the user exists
+    user = users_collection.find_one({"_id": user_obj_id})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Only staff users can have permissions
+    if user["role"] != "staff":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Permissions can only be set for staff users"
+        )
+    
+    # Update or create permissions
+    permissions_data = {
+        "user_id": str(user_obj_id),
+        "can_add_student": permissions.can_add_student,
+        "can_edit_student": permissions.can_edit_student,
+        "can_delete_student": permissions.can_delete_student,
+        "updated_at": datetime.utcnow()
+    }
+    
+    # Upsert (update if exists, insert if not)
+    permissions_collection.update_one(
+        {"user_id": str(user_obj_id)},
+        {"$set": permissions_data},
+        upsert=True
+    )
+    
+    return permissions 

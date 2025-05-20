@@ -40,4 +40,16 @@ class UpdateUserRole(BaseModel):
     role: UserRole
 
 class UpdateUserPassword(BaseModel):
-    password: str 
+    password: str
+
+# New schema for user permissions
+class UserPermissions(BaseModel):
+    can_add_student: bool = False
+    can_edit_student: bool = False
+    can_delete_student: bool = False
+    
+    class Config:
+        arbitrary_types_allowed = True
+        json_encoders = {
+            ObjectId: str
+        } 

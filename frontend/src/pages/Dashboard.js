@@ -82,7 +82,7 @@ const Dashboard = () => {
       case 'principal':
         return (
           <>
-            <div className="bg-[#2B2B2B] rounded-2xl shadow-xl border border-[#423F3E] p-8 mb-8">
+            <div className="bg-[#2B2B2B] rounded-2xl shadow-xl border border-[#423F3E] p-8 mb-6">
               <h3 className="text-xl font-semibold mb-4 text-white">Principal Dashboard</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-[#362222] p-6 rounded-lg">
@@ -96,9 +96,9 @@ const Dashboard = () => {
               </div>
             </div>
             
-            <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] p-6 mb-8">
+            <div className="bg-[#2B2B2B] rounded-lg shadow-md border border-[#423F3E] p-6 mb-6">
               <h3 className="text-xl font-semibold mb-4 text-white">Administrative Actions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Link to="/user-management" className="block w-full">
                   <button className="w-full py-3 px-4 bg-[#362222] hover:bg-[#423F3E] text-white rounded-md transition-colors duration-300">
                     Manage Users & Roles
@@ -114,41 +114,44 @@ const Dashboard = () => {
                     Manage Staff
                   </button>
                 </Link>
+                <Link to="/permissions-management" className="block w-full">
+                  <button className="w-full py-3 px-4 bg-[#362222] hover:bg-[#423F3E] text-white rounded-md transition-colors duration-300">
+                    Manage Permissions
+                  </button>
+                </Link>
               </div>
             </div>
             
-            {/* Student Management Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out">
-                <Link to="/student-management" className="text-white">
+                <Link to="/student-management" className="text-white block h-full">
                   <h3 className="text-xl font-semibold mb-2">Student Management</h3>
                   <p className="text-gray-300 mb-4">Manage student records, enrollments, and information</p>
-                  <span className="text-white flex items-center">
+                  <span className="text-white flex items-center mt-auto">
                     Access Student Records <span className="ml-2">→</span>
                   </span>
                 </Link>
               </div>
               
               <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out">
-                <Link to="/attendance-management" className="text-white">
+                <Link to="/attendance-management" className="text-white block h-full">
                   <h3 className="text-xl font-semibold mb-2">Attendance Management</h3>
-                  <p className="text-gray-300 mb-4">Set working days, record attendance and view low attendance reports</p>
-                  <span className="text-white flex items-center">
+                  <p className="text-gray-300 mb-4">Set working days, record attendance and track reports</p>
+                  <span className="text-white flex items-center mt-auto">
                     Manage Attendance <span className="ml-2">→</span>
                   </span>
                 </Link>
               </div>
-            </div>
-            
-            {/* Exam Management Card */}
-            <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out mb-6">
-              <Link to="/exam-management" className="text-white">
-                <h3 className="text-xl font-semibold mb-2">Exam Management</h3>
-                <p className="text-gray-300 mb-4">Enter and manage student marks for different exams</p>
-                <span className="text-white flex items-center">
-                  Manage Exams <span className="ml-2">→</span>
-                </span>
-              </Link>
+              
+              <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out">
+                <Link to="/exam-management" className="text-white block h-full">
+                  <h3 className="text-xl font-semibold mb-2">Exam Management</h3>
+                  <p className="text-gray-300 mb-4">Enter and manage student marks for different exams</p>
+                  <span className="text-white flex items-center mt-auto">
+                    Manage Exams <span className="ml-2">→</span>
+                  </span>
+                </Link>
+              </div>
             </div>
           </>
         );
@@ -156,42 +159,40 @@ const Dashboard = () => {
       case 'staff':
         return (
           <>
-            <div className="bg-[#2B2B2B] rounded-2xl shadow-xl border border-[#423F3E] p-8 mb-8">
+            <div className="bg-[#2B2B2B] rounded-2xl shadow-xl border border-[#423F3E] p-8 mb-6">
               <h3 className="text-xl font-semibold mb-4 text-white">Staff Dashboard</h3>
             </div>
             
-            {/* Student Management Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out">
-                <Link to="/student-management" className="text-white">
+                <Link to="/student-management" className="text-white block h-full">
                   <h3 className="text-xl font-semibold mb-2">Student Management</h3>
                   <p className="text-gray-300 mb-4">Access and manage student information records</p>
-                  <span className="text-white flex items-center">
+                  <span className="text-white flex items-center mt-auto">
                     View Students <span className="ml-2">→</span>
                   </span>
                 </Link>
               </div>
               
               <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out">
-                <Link to="/attendance-management" className="text-white">
+                <Link to="/attendance-management" className="text-white block h-full">
                   <h3 className="text-xl font-semibold mb-2">Attendance Management</h3>
                   <p className="text-gray-300 mb-4">Record attendance and identify students with low attendance</p>
-                  <span className="text-white flex items-center">
+                  <span className="text-white flex items-center mt-auto">
                     Record Attendance <span className="ml-2">→</span>
                   </span>
                 </Link>
               </div>
-            </div>
-            
-            {/* Exam Management Card */}
-            <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out mb-6">
-              <Link to="/exam-management" className="text-white">
-                <h3 className="text-xl font-semibold mb-2">Exam Management</h3>
-                <p className="text-gray-300 mb-4">Enter and manage student marks for different exams</p>
-                <span className="text-white flex items-center">
-                  Manage Exams <span className="ml-2">→</span>
-                </span>
-              </Link>
+              
+              <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out">
+                <Link to="/exam-management" className="text-white block h-full">
+                  <h3 className="text-xl font-semibold mb-2">Exam Management</h3>
+                  <p className="text-gray-300 mb-4">Enter and manage student marks for different exams</p>
+                  <span className="text-white flex items-center mt-auto">
+                    Manage Exams <span className="ml-2">→</span>
+                  </span>
+                </Link>
+              </div>
             </div>
           </>
         );
