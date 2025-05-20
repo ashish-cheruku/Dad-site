@@ -44,6 +44,10 @@ const StudentManagement = () => {
   const [loadingExams, setLoadingExams] = useState(false);
   const [currentAcademicYear, setCurrentAcademicYear] = useState('2024-2025');
   const [selectedMonth, setSelectedMonth] = useState('january');
+  
+  // Progress card generation state
+  const [pdfGenerationProgress, setPdfGenerationProgress] = useState('Initializing...');
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // New student form state
   const [newStudent, setNewStudent] = useState({
@@ -188,20 +192,27 @@ const StudentManagement = () => {
     try {
       const allAttendance = {};
       
-      // Fetch attendance data for each month
-      for (const month of months) {
-        try {
-          const data = await attendanceService.getStudentAttendance(
-            studentId,
-            currentAcademicYear,
-            month
-          );
-          allAttendance[month] = data;
-        } catch (error) {
+      // Use Promise.all to fetch all months concurrently instead of sequentially
+      const requests = months.map(month => 
+        attendanceService.getStudentAttendance(
+          studentId,
+          currentAcademicYear,
+          month
+        )
+        .catch(error => {
           console.error(`Error fetching attendance for ${month}:`, error);
-          allAttendance[month] = { working_days: 0, days_present: 0, attendance_percentage: 0 };
-        }
-      }
+          // Return default values on error
+          return { working_days: 0, days_present: 0, attendance_percentage: 0 };
+        })
+      );
+      
+      // Wait for all requests to complete
+      const results = await Promise.all(requests);
+      
+      // Map results to months
+      months.forEach((month, index) => {
+        allAttendance[month] = results[index];
+      });
       
       return allAttendance;
     } catch (err) {
@@ -503,11 +514,15 @@ const StudentManagement = () => {
 
     // Show loading message
     setError('Generating progress card, please wait...');
-
+    
     // Async function to handle the PDF generation
     const generatePDF = async () => {
+      setIsGeneratingPDF(true);
+      setPdfGenerationProgress('Initializing...');
+      
       try {
         // Fetch attendance data for all months
+        setPdfGenerationProgress('Fetching attendance data...');
         let allMonthsAttendance = {};
         try {
           allMonthsAttendance = await fetchAllMonthsAttendance(studentDetails.id);
@@ -518,6 +533,7 @@ const StudentManagement = () => {
         }
         
         // Create a new jsPDF instance
+        setPdfGenerationProgress('Creating PDF document...');
         const doc = new jsPDF();
         
         try {
@@ -541,20 +557,22 @@ const StudentManagement = () => {
           doc.line(15, 32, pageWidth - 15, 32);
           
           // Student details section
+          setPdfGenerationProgress('Adding student information...');
           doc.setFontSize(14);
           doc.setFont('helvetica', 'bold');
           doc.text('Student Information', 15, 40);
           doc.setFont('helvetica', 'normal');
           
+          // Prepare student info data - safeguard against missing properties
           const studentInfoData = [
-            ['Name', studentDetails.name],
-            ['Admission Number', studentDetails.admission_number],
-            ['Year', studentDetails.year.toString()],
-            ['Group', capitalize(studentDetails.group)],
-            ['Medium', capitalize(studentDetails.medium)],
+            ['Name', studentDetails.name || 'N/A'],
+            ['Admission Number', studentDetails.admission_number || 'N/A'],
+            ['Year', studentDetails.year ? studentDetails.year.toString() : 'N/A'],
+            ['Group', studentDetails.group ? capitalize(studentDetails.group) : 'N/A'],
+            ['Medium', studentDetails.medium ? capitalize(studentDetails.medium) : 'N/A'],
             ['Father\'s Name', studentDetails.father_name || 'N/A'],
             ['Date of Birth', formatDate(studentDetails.date_of_birth) || 'N/A'],
-            ['Gender', capitalize(studentDetails.gender) || 'N/A'],
+            ['Gender', studentDetails.gender ? capitalize(studentDetails.gender) : 'N/A'],
           ];
           
           try {
@@ -576,8 +594,9 @@ const StudentManagement = () => {
           }
           
           // Attendance section
+          setPdfGenerationProgress('Adding attendance data...');
           try {
-            const attendanceY = doc.lastAutoTable.finalY + 15;
+            const attendanceY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 15 : 120;
             doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
             doc.text('Attendance Summary (All Months)', 15, attendanceY);
@@ -590,7 +609,7 @@ const StudentManagement = () => {
             let totalWorkingDays = 0;
             let totalDaysPresent = 0;
             
-            // Add data for each month
+            // Add data for each month - faster processing with fewer iterations
             months.forEach(month => {
               const monthData = allMonthsAttendance[month] || { working_days: 0, days_present: 0, attendance_percentage: 0 };
               
@@ -598,14 +617,15 @@ const StudentManagement = () => {
                 totalWorkingDays += monthData.working_days;
                 totalDaysPresent += monthData.days_present;
                 
-                const status = monthData.attendance_percentage >= 75 ? 'Good' : 
-                              monthData.attendance_percentage >= 50 ? 'Average' : 'Poor';
+                const percentage = monthData.attendance_percentage || 0;
+                const status = percentage >= 75 ? 'Good' : 
+                              percentage >= 50 ? 'Average' : 'Poor';
                 
                 attendanceTableBody.push([
                   capitalize(month),
                   monthData.working_days,
                   monthData.days_present,
-                  `${monthData.attendance_percentage.toFixed(1)}%`,
+                  `${percentage.toFixed(1)}%`,
                   status
                 ]);
               }
@@ -644,14 +664,9 @@ const StudentManagement = () => {
           }
           
           // Exam Records section
+          setPdfGenerationProgress('Adding exam records...');
           try {
-            let examsY = 200; // Default if previous section failed
-            try {
-              examsY = doc.lastAutoTable.finalY + 15;
-            } catch (e) {
-              console.warn('Could not get last table Y position, using default');
-            }
-            
+            let examsY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 15 : 200;
             doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
             doc.text('Exam Records', 15, examsY);
@@ -665,13 +680,19 @@ const StudentManagement = () => {
             if (studentExams && studentExams.exams && Array.isArray(studentExams.exams)) {
               studentExams.exams.forEach(exam => {
                 if (exam && exam.subjects) {
-                  examTableBody.push([
-                    exam.exam_type,
-                    Object.keys(exam.subjects).join(", "),
-                    exam.total_marks,
-                    Object.keys(exam.subjects).length * 100,
-                    `${exam.percentage.toFixed(1)}%`
-                  ]);
+                  try {
+                    const subjectKeys = Object.keys(exam.subjects);
+                    examTableBody.push([
+                      exam.exam_type || 'Unknown',
+                      subjectKeys.join(", "),
+                      exam.total_marks || 0,
+                      subjectKeys.length * 100,
+                      `${(exam.percentage || 0).toFixed(1)}%`
+                    ]);
+                  } catch (err) {
+                    console.error('Error processing exam row:', err);
+                    // Skip this exam but continue with others
+                  }
                 }
               });
             }
@@ -693,6 +714,7 @@ const StudentManagement = () => {
             // Continue with the PDF
           }
           
+          setPdfGenerationProgress('Finalizing PDF...');
           try {
             // Save the PDF
             doc.save(`progress_card_${studentDetails.admission_number}.pdf`);
@@ -722,6 +744,8 @@ const StudentManagement = () => {
             setError('Failed to generate progress card due to an unknown error');
           }
         }
+      } finally {
+        setIsGeneratingPDF(false);
       }
     };
 
@@ -804,8 +828,14 @@ const StudentManagement = () => {
                   onClick={generateProgressCard}
                   className="py-2 px-4 rounded-lg"
                   style={{ backgroundColor: '#362222', color: 'white' }}
+                  disabled={isGeneratingPDF}
                 >
-                  Print Progress Card
+                  {isGeneratingPDF ? (
+                    <>
+                      <div className="animate-spin h-4 w-4 mr-2 border-2 border-t-transparent border-white rounded-full inline-block"></div>
+                      Generating...
+                    </>
+                  ) : 'Print Progress Card'}
                 </Button>
                 <Button 
                   onClick={() => {
@@ -821,6 +851,19 @@ const StudentManagement = () => {
             </div>
             
             <ErrorDisplay error={error} />
+            
+            {/* PDF Generation Progress */}
+            {isGeneratingPDF && (
+              <div className="bg-[#362222] rounded-lg p-4 mb-6 text-white">
+                <div className="flex items-center">
+                  <div className="animate-spin h-5 w-5 mr-3 border-2 border-t-transparent border-white rounded-full"></div>
+                  <span className="font-medium">Generating PDF: {pdfGenerationProgress}</span>
+                </div>
+                <div className="w-full bg-[#171010] rounded-full h-2.5 mt-2">
+                  <div className="bg-white h-2.5 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+                </div>
+              </div>
+            )}
             
             {/* Student Details Card */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
