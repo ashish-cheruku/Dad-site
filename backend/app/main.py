@@ -7,6 +7,7 @@ from app.routes.faculty import routes as faculty_routes
 from app.routes.dashboards import routes as dashboard_routes
 from app.routes.students import routes as students_routes
 from app.routes.attendance import routes as attendance_routes
+from app.routes.exams import routes as exams_routes
 from config.settings import CORS_ORIGINS
 
 # Initialize FastAPI app
@@ -35,6 +36,8 @@ app.include_router(dashboard_routes.router, prefix="/staff", tags=["Dashboards"]
 app.include_router(students_routes.router, prefix="/students", tags=["Students"])
 # Attendance management routes
 app.include_router(attendance_routes.router, prefix="/attendance", tags=["Attendance"])
+# Exam management routes
+app.include_router(exams_routes.router, prefix="/exams", tags=["Exams"])
 
 @app.get("/")
 async def root():

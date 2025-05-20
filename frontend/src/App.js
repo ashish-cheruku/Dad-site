@@ -11,6 +11,8 @@ import AnnouncementManagement from './pages/AnnouncementManagement';
 import StaffManagement from './pages/StaffManagement';
 import StudentManagement from './pages/StudentManagement';
 import AttendanceManagement from './pages/AttendanceManagement';
+import ExamManagement from './pages/ExamManagement';
+import ExamDetails from './pages/ExamDetails';
 import Announcements from './pages/Announcements';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -93,6 +95,26 @@ function App() {
           element={
             <ProtectedRoute requiredRole="staff">
               <AttendanceManagement />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Exam Management - Principal and Staff */}
+        <Route 
+          path="/exam-management" 
+          element={
+            <ProtectedRoute requiredRole="staff">
+              <ExamManagement />
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Exam Details - Principal and Staff */}
+        <Route 
+          path="/exam-details/:examId" 
+          element={
+            <ProtectedRoute requiredRole="staff">
+              <ExamDetails />
             </ProtectedRoute>
           } 
         />

@@ -12,6 +12,7 @@ ANNOUNCEMENTS_COLLECTION = "announcements"
 FACULTY_COLLECTION = "faculty"
 STUDENTS_COLLECTION = "students"
 ATTENDANCE_COLLECTION = "attendance"
+EXAMS_COLLECTION = "exams"
 
 # Security Configuration
 SECRET_KEY = "YOUR_SECRET_KEY_HERE"  # In production, use a secure secret key stored in environment variable
@@ -20,4 +21,4 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 120  # Increased to 2 hours
 ACCESS_TOKEN_EXPIRE_DELTA = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
 # CORS Settings
-CORS_ORIGINS = ["http://localhost:3000"]  # Frontend URL 
+CORS_ORIGINS = ["http://localhost:3000", "http://localhost:18081", "http://20.55.51.47:18081"]  # Frontend URL 

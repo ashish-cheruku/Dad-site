@@ -139,6 +139,17 @@ const Dashboard = () => {
                 </Link>
               </div>
             </div>
+            
+            {/* Exam Management Card */}
+            <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out mb-6">
+              <Link to="/exam-management" className="text-white">
+                <h3 className="text-xl font-semibold mb-2">Exam Management</h3>
+                <p className="text-gray-300 mb-4">Enter and manage student marks for different exams</p>
+                <span className="text-white flex items-center">
+                  Manage Exams <span className="ml-2">→</span>
+                </span>
+              </Link>
+            </div>
           </>
         );
       
@@ -206,6 +217,17 @@ const Dashboard = () => {
                   </span>
                 </Link>
               </div>
+            </div>
+            
+            {/* Exam Management Card */}
+            <div className="bg-[#362222] p-6 rounded-lg hover:bg-[#423F3E] transition duration-200 ease-in-out mb-6">
+              <Link to="/exam-management" className="text-white">
+                <h3 className="text-xl font-semibold mb-2">Exam Management</h3>
+                <p className="text-gray-300 mb-4">Enter and manage student marks for different exams</p>
+                <span className="text-white flex items-center">
+                  Manage Exams <span className="ml-2">→</span>
+                </span>
+              </Link>
             </div>
           </>
         );

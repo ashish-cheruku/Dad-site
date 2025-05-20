@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8004';
+const API_URL = 'http://20.55.51.47:1821';
 
 // Token expiration handling
 const checkTokenExpiration = () => {
@@ -274,42 +274,91 @@ export const announcementService = {
   }
 };
 
-// Faculty service
-export const facultyService = {
-  // Get all faculty members
-  getAllFaculty: async () => {
+// Exam management service
+export const examService = {
+  // Get subjects for a specific group
+  getSubjectsForGroup: async (group) => {
     try {
-      const response = await api.get('/faculty');
+      const response = await api.get(`/exams/subjects/${group}`);
       return response.data;
     } catch (error) {
       throw error.response ? error.response.data : { detail: 'Network error' };
     }
   },
-
-  // Create new faculty member (Principal only)
-  createFaculty: async (facultyData) => {
+  
+  // Get all exams with optional filtering
+  getAllExams: async (filters = {}) => {
     try {
-      const response = await api.post('/faculty', facultyData);
+      // Convert filters object to query params
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, value);
+        }
+      });
+      
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const response = await api.get(`/exams${query}`);
       return response.data;
     } catch (error) {
       throw error.response ? error.response.data : { detail: 'Network error' };
     }
   },
-
-  // Update existing faculty member (Principal only)
-  updateFaculty: async (id, facultyData) => {
+  
+  // Get a specific exam by ID
+  getExam: async (examId) => {
     try {
-      const response = await api.put(`/faculty/${id}`, facultyData);
+      const response = await api.get(`/exams/${examId}`);
       return response.data;
     } catch (error) {
       throw error.response ? error.response.data : { detail: 'Network error' };
     }
   },
-
-  // Delete faculty member (Principal only)
-  deleteFaculty: async (id) => {
+  
+  // Get all exams for a specific student
+  getStudentExams: async (studentId) => {
     try {
-      await api.delete(`/faculty/${id}`);
+      const response = await api.get(`/exams/student/${studentId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Get exams for multiple students at once (batch)
+  getBatchStudentExams: async (studentIds) => {
+    try {
+      const response = await api.post(`/exams/batch`, studentIds);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Create a new exam record
+  createExam: async (examData) => {
+    try {
+      const response = await api.post('/exams', examData);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Update an existing exam record
+  updateExam: async (examId, examData) => {
+    try {
+      const response = await api.put(`/exams/${examId}`, examData);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+  
+  // Delete an exam record (Principal only)
+  deleteExam: async (examId) => {
+    try {
+      await api.delete(`/exams/${examId}`);
       return true;
     } catch (error) {
       throw error.response ? error.response.data : { detail: 'Network error' };
@@ -320,19 +369,18 @@ export const facultyService = {
 // Student service
 export const studentService = {
   // Get all students with optional filtering
-  getAllStudents: async (year = null, group = null, medium = null) => {
+  getAllStudents: async (filters = {}) => {
     try {
-      let url = '/students';
+      // Convert filters object to query params
       const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, value);
+        }
+      });
       
-      if (year !== null) params.append('year', year);
-      if (group !== null) params.append('group', group);
-      if (medium !== null) params.append('medium', medium);
-      
-      const queryString = params.toString();
-      if (queryString) url += `?${queryString}`;
-      
-      const response = await api.get(url);
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const response = await api.get(`/students${query}`);
       return response.data;
     } catch (error) {
       throw error.response ? error.response.data : { detail: 'Network error' };
@@ -373,6 +421,49 @@ export const studentService = {
   deleteStudent: async (studentId) => {
     try {
       await api.delete(`/students/${studentId}`);
+      return true;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  }
+};
+
+// Faculty service
+export const facultyService = {
+  // Get all faculty members
+  getAllFaculty: async () => {
+    try {
+      const response = await api.get('/faculty');
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+
+  // Create new faculty member (Principal only)
+  createFaculty: async (facultyData) => {
+    try {
+      const response = await api.post('/faculty', facultyData);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+
+  // Update existing faculty member (Principal only)
+  updateFaculty: async (id, facultyData) => {
+    try {
+      const response = await api.put(`/faculty/${id}`, facultyData);
+      return response.data;
+    } catch (error) {
+      throw error.response ? error.response.data : { detail: 'Network error' };
+    }
+  },
+
+  // Delete faculty member (Principal only)
+  deleteFaculty: async (id) => {
+    try {
+      await api.delete(`/faculty/${id}`);
       return true;
     } catch (error) {
       throw error.response ? error.response.data : { detail: 'Network error' };
